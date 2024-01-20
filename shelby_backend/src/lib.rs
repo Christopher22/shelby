@@ -1,5 +1,6 @@
 mod database;
 pub mod person;
+pub mod user;
 
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,17 @@ where
 {
     pub identifier: PrimaryKey<T>,
     pub value: T,
+}
+
+impl<T> std::ops::Deref for Record<T>
+where
+    T: IndexableDatebaseEntry,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
 }
 
 /// The primary key of a record.
@@ -34,6 +46,13 @@ impl<T: IndexableDatebaseEntry> rusqlite::ToSql for PrimaryKey<T> {
 impl<T: IndexableDatebaseEntry> rusqlite::types::FromSql for PrimaryKey<T> {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         i64::column_result(value).map(PrimaryKey::from)
+    }
+}
+
+#[cfg(test)]
+impl<T: IndexableDatebaseEntry> Default for PrimaryKey<T> {
+    fn default() -> Self {
+        Self(0, std::marker::PhantomData)
     }
 }
 
@@ -137,7 +156,8 @@ pub(crate) mod macros {
     macro_rules! make_struct {
         ($name: ident (Table: $table_name: expr) depends on $dependencies: ty => { $($element: ident: $ty: ty => $value: expr),* } $( ($additional_conditions: expr) )?) => {
             paste::paste! {
-                #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+                #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+                #[cfg_attr(test, derive(Default))]
                 pub struct $name {
                     $( pub $element: $ty),*
                 }
