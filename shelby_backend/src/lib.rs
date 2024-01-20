@@ -1,4 +1,5 @@
 mod database;
+pub mod person;
 
 use serde::{Deserialize, Serialize};
 
@@ -73,7 +74,6 @@ pub trait IndexableDatebaseEntry: DatabaseEntry {
     }
 }
 
-#[allow(unused)]
 pub(crate) mod macros {
     macro_rules! question_mark {
         ($name: ident) => {
@@ -157,7 +157,7 @@ pub(crate) mod macros {
             }
         );
 
-        /// We need to check values with single elements are properly serialized, too.
+        // We need to check values with single elements are properly serialized, too.
         crate::macros::make_struct!(
             TestSingleElement ("tests_single") => {
                 string_value: String  => "STRING NOT NULL"
