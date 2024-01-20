@@ -8,10 +8,4 @@ impl Database {
     pub fn from_memory() -> Result<Self, rusqlite::Error> {
         Connection::open_in_memory().map(|connection| Database { connection })
     }
-
-    pub fn create_table<T: crate::DatabaseEntry>(&self) -> Result<(), rusqlite::Error> {
-        self.connection
-            .execute(T::STATEMENT_CREATE_TABLE, ())
-            .map(|_| ())
-    }
 }

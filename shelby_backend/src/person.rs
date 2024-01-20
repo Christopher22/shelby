@@ -1,7 +1,7 @@
 use crate::{DatabaseEntry, PrimaryKey};
 
 crate::macros::make_struct!(
-    Person ("persons") => {
+    Person (Table: "persons") depends on () => {
         name: String => "STRING NOT NULL",
         address: String => "STRING NOT NULL",
         email: Option<String> => "STRING",
@@ -11,7 +11,7 @@ crate::macros::make_struct!(
 );
 
 crate::macros::make_struct!(
-    Group ("groups") => {
+    Group (Table: "groups") depends on () => {
         description: String => "STRING NOT NULL"
     }
 );
@@ -25,10 +25,11 @@ pub struct Membership {
 }
 
 impl DatabaseEntry for Membership {
-    const TABLE_NAME: &'static str = "memberships";
+    type DependsOn = (Person, Group);
 
+    const TABLE_NAME: &'static str = "memberships";
     const STATEMENT_CREATE_TABLE: &'static str = std::concat!(
-        "CREATE TABLE memberships (
+        "CREATE TABLE IF NOT EXISTS memberships (
             person_id INTEGER NOT NULL, group_id INTEGER NOT NULL, updated DATETIME, comment STRING,
             PRIMARY KEY (person_id, group_id),
             FOREIGN KEY (person_id) REFERENCES persons(id), 
@@ -88,7 +89,7 @@ impl Membership {
 
 #[cfg(test)]
 mod membership_tests {
-    use crate::{Database, IndexableDatebaseEntry, PrimaryKey};
+    use crate::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey};
 
     use super::{Group, Membership, Person};
 
@@ -98,9 +99,7 @@ mod membership_tests {
         PrimaryKey<Group>,
     ) {
         let database = Database::from_memory().expect("valid database");
-        database.create_table::<Person>().expect("valid table");
-        database.create_table::<Group>().expect("valid table");
-        database.create_table::<Membership>().expect("valid table");
+        Membership::create_table(&database).expect("valid table");
 
         let p1 = Person {
             name: String::from("Max Mustermann"),

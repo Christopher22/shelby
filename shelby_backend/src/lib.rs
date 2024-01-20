@@ -25,10 +25,63 @@ impl<T: IndexableDatebaseEntry> From<i64> for PrimaryKey<T> {
     }
 }
 
+impl<T: IndexableDatebaseEntry> rusqlite::ToSql for PrimaryKey<T> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(rusqlite::types::ToSqlOutput::Owned(self.0.into()))
+    }
+}
+
+impl<T: IndexableDatebaseEntry> rusqlite::types::FromSql for PrimaryKey<T> {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        i64::column_result(value).map(PrimaryKey::from)
+    }
+}
+
+pub trait Dependency {
+    fn create_dependencies(database: &Database) -> Result<(), rusqlite::Error>;
+}
+
+impl Dependency for () {
+    fn create_dependencies(_: &Database) -> Result<(), rusqlite::Error> {
+        Ok(())
+    }
+}
+
+impl<T> Dependency for T
+where
+    T: DatabaseEntry,
+{
+    fn create_dependencies(database: &Database) -> Result<(), rusqlite::Error> {
+        T::DependsOn::create_dependencies(database)?;
+        database
+            .connection
+            .execute(T::STATEMENT_CREATE_TABLE, ())
+            .map(|_| ())
+    }
+}
+
+impl<T1, T2> Dependency for (T1, T2)
+where
+    T1: Dependency,
+    T2: Dependency,
+{
+    fn create_dependencies(database: &Database) -> Result<(), rusqlite::Error> {
+        T1::create_dependencies(database)?;
+        T2::create_dependencies(database)
+    }
+}
+
 /// An element serialialized in the Database.
 pub trait DatabaseEntry: Sized {
+    type DependsOn: Dependency;
+
     const TABLE_NAME: &'static str;
     const STATEMENT_CREATE_TABLE: &'static str;
+
+    /// Create the required table and all dependencies.
+    fn create_table(database: &Database) -> Result<(), rusqlite::Error> {
+        Self::create_dependencies(database)
+    }
 }
 
 /// An value insertable in the database.
@@ -82,7 +135,7 @@ pub(crate) mod macros {
     }
 
     macro_rules! make_struct {
-        ($name: ident ($table_name: expr) => { $($element: ident: $ty: ty => $value: expr),* } ) => {
+        ($name: ident (Table: $table_name: expr) depends on $dependencies: ty => { $($element: ident: $ty: ty => $value: expr),* } $( ($additional_conditions: expr) )?) => {
             paste::paste! {
                 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
                 pub struct $name {
@@ -90,8 +143,10 @@ pub(crate) mod macros {
                 }
 
                 impl crate::DatabaseEntry for $name {
+                    type DependsOn = $dependencies;
+
                     const TABLE_NAME: &'static str = $table_name;
-                    const STATEMENT_CREATE_TABLE: &'static str = std::concat!("CREATE TABLE ", $table_name, " (id INTEGER PRIMARY KEY", $( ", ", stringify!($element), " ", $value),*, " )");
+                    const STATEMENT_CREATE_TABLE: &'static str = std::concat!("CREATE TABLE IF NOT EXISTS ", $table_name, " (id INTEGER PRIMARY KEY", $( ", ", stringify!($element), " ", $value),* $(, ", ", $additional_conditions, " ")? , " )");
                 }
 
                 impl crate::IndexableDatebaseEntry for $name {
@@ -116,20 +171,20 @@ pub(crate) mod macros {
 
                 #[cfg(test)]
                 mod [< "test_" $table_name >] {
-                    use crate::IndexableDatebaseEntry;
+                    use crate::{DatabaseEntry, IndexableDatebaseEntry};
                     use super::$name;
 
                     #[test]
                     fn test_insert_automatically() {
                         let database = crate::Database::from_memory().expect("valid database");
-                        database.create_table::<$name>().expect("valid table");
+                        $name::create_table(&database).expect("valid table");
                         $name::default().insert(&database).expect("insert sucessfull");
                     }
 
                     #[test]
                     fn test_select_automatically() {
                         let database = crate::Database::from_memory().expect("valid database");
-                        database.create_table::<$name>().expect("valid table");
+                        $name::create_table(&database).expect("valid table");
 
                         let example = $name::default();
                         let id = example.insert(&database).expect("insert sucessfull");
@@ -150,7 +205,7 @@ pub(crate) mod macros {
         use crate::{Database, DatabaseEntry, IndexableDatebaseEntry};
 
         crate::macros::make_struct!(
-            Test ("tests") => {
+            Test (Table: "tests") depends on () => {
                 bool_value: bool => "BOOL NOT NULL",
                 string_value: String  => "STRING NOT NULL",
                 integer_value: u32 => "INTEGER NOT NULL"
@@ -159,7 +214,7 @@ pub(crate) mod macros {
 
         // We need to check values with single elements are properly serialized, too.
         crate::macros::make_struct!(
-            TestSingleElement ("tests_single") => {
+            TestSingleElement (Table: "tests_single") depends on () => {
                 string_value: String  => "STRING NOT NULL"
             }
         );
@@ -173,7 +228,7 @@ pub(crate) mod macros {
         fn test_create_table_statement() {
             assert_eq!(
                 Test::STATEMENT_CREATE_TABLE,
-                "CREATE TABLE tests (id INTEGER PRIMARY KEY, bool_value BOOL NOT NULL, string_value STRING NOT NULL, integer_value INTEGER NOT NULL )"
+                "CREATE TABLE IF NOT EXISTS tests (id INTEGER PRIMARY KEY, bool_value BOOL NOT NULL, string_value STRING NOT NULL, integer_value INTEGER NOT NULL )"
             );
         }
 
@@ -196,7 +251,8 @@ pub(crate) mod macros {
         #[test]
         fn test_insert() {
             let database = Database::from_memory().expect("valid database");
-            database.create_table::<Test>().expect("valid table");
+            Test::create_table(&database).expect("valid table");
+
             Test {
                 bool_value: false,
                 string_value: String::from("ABC"),
