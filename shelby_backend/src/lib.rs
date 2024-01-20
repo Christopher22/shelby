@@ -8,30 +8,30 @@ pub use self::database::Database;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Record<T>
 where
-    T: DatebaseEntry,
+    T: IndexableDatebaseEntry,
 {
     pub identifier: PrimaryKey<T>,
     pub value: T,
 }
 
 /// The primary key of a record.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PrimaryKey<T: DatebaseEntry>(pub(crate) i64, std::marker::PhantomData<T>);
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrimaryKey<T: IndexableDatebaseEntry>(pub(crate) i64, std::marker::PhantomData<T>);
 
-impl<T: DatebaseEntry> From<i64> for PrimaryKey<T> {
+impl<T: IndexableDatebaseEntry> From<i64> for PrimaryKey<T> {
     fn from(value: i64) -> Self {
         Self(value, std::marker::PhantomData)
     }
 }
 
 /// An element serialialized in the Database.
-pub trait DatebaseEntry: Sized {
+pub trait DatabaseEntry: Sized {
     const TABLE_NAME: &'static str;
     const STATEMENT_CREATE_TABLE: &'static str;
 }
 
 /// An value insertable in the database.
-pub trait IndexableDatebaseEntry: DatebaseEntry {
+pub trait IndexableDatebaseEntry: DatabaseEntry {
     /// The statement for select WITH explicit primary key.
     const STATEMENT_SELECT: &'static str;
 
@@ -89,7 +89,7 @@ pub(crate) mod macros {
                     $( pub $element: $ty),*
                 }
 
-                impl crate::DatebaseEntry for $name {
+                impl crate::DatabaseEntry for $name {
                     const TABLE_NAME: &'static str = $table_name;
                     const STATEMENT_CREATE_TABLE: &'static str = std::concat!("CREATE TABLE ", $table_name, " (id INTEGER PRIMARY KEY", $( ", ", stringify!($element), " ", $value),*, " )");
                 }
@@ -147,7 +147,7 @@ pub(crate) mod macros {
 
     #[cfg(test)]
     mod test {
-        use crate::{Database, DatebaseEntry, IndexableDatebaseEntry};
+        use crate::{Database, DatabaseEntry, IndexableDatebaseEntry};
 
         crate::macros::make_struct!(
             Test ("tests") => {
