@@ -24,10 +24,15 @@ impl<T: DatebaseEntry> From<i64> for PrimaryKey<T> {
     }
 }
 
-/// An value insertable in the database.
+/// An element serialialized in the Database.
 pub trait DatebaseEntry: Sized {
     const TABLE_NAME: &'static str;
     const STATEMENT_CREATE_TABLE: &'static str;
+}
+
+/// An value insertable in the database.
+pub trait IndexableDatebaseEntry: DatebaseEntry {
+    /// The statement for select WITH explicit primary key.
     const STATEMENT_SELECT: &'static str;
 
     /// The statement for insert the InsertValue WITHOUT explicit primary key.
@@ -66,14 +71,6 @@ pub trait DatebaseEntry: Sized {
             .execute(Self::STATEMENT_INSERT, self.serialize_sql())
             .map(|_| PrimaryKey::from(database.connection.last_insert_rowid()))
     }
-
-    /// Create a corresponding table (with an additional primary key).
-    fn create_table(database: &crate::Database) -> Result<usize, rusqlite::Error> {
-        database.connection.execute(
-            Self::STATEMENT_CREATE_TABLE,
-            (), // empty list of parameters.
-        )
-    }
 }
 
 #[allow(unused)]
@@ -95,14 +92,17 @@ pub(crate) mod macros {
                 impl crate::DatebaseEntry for $name {
                     const TABLE_NAME: &'static str = $table_name;
                     const STATEMENT_CREATE_TABLE: &'static str = std::concat!("CREATE TABLE ", $table_name, " (id INTEGER PRIMARY KEY", $( ", ", stringify!($element), " ", $value),*, " )");
+                }
+
+                impl crate::IndexableDatebaseEntry for $name {
                     const STATEMENT_INSERT: &'static str = std::concat!("INSERT INTO ", $table_name, " (", concat_with::concat!(with ", ", $(stringify!($element)),*), ") VALUES (", concat_with::concat!(with ", ", $(crate::macros::question_mark!($element)),*), ")");
                     const STATEMENT_SELECT: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name, " WHERE id = ?");
 
-                    type InsertValue<'a> = ($( &'a $ty ),*);
+                    type InsertValue<'a> = ($( &'a $ty ),*, );
                     type SelectValue<'a> = (i64, $( $ty ),*);
 
                     fn serialize_sql<'a>(&'a self) -> Self::InsertValue<'a> {
-                        ($( &self.$element ),*)
+                        ($( &self.$element ),* ,)
                     }
 
                     fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> crate::Record<Self> {
@@ -116,7 +116,7 @@ pub(crate) mod macros {
 
                 #[cfg(test)]
                 mod [< "test_" $table_name >] {
-                    use crate::DatebaseEntry;
+                    use crate::IndexableDatebaseEntry;
                     use super::$name;
 
                     #[test]
@@ -147,14 +147,20 @@ pub(crate) mod macros {
 
     #[cfg(test)]
     mod test {
-        use crate::{Database, DatebaseEntry};
+        use crate::{Database, DatebaseEntry, IndexableDatebaseEntry};
 
-        // Create the
         crate::macros::make_struct!(
             Test ("tests") => {
                 bool_value: bool => "BOOL NOT NULL",
                 string_value: String  => "STRING NOT NULL",
                 integer_value: u32 => "INTEGER NOT NULL"
+            }
+        );
+
+        /// We need to check values with single elements are properly serialized, too.
+        crate::macros::make_struct!(
+            TestSingleElement ("tests_single") => {
+                string_value: String  => "STRING NOT NULL"
             }
         );
 
