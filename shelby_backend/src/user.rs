@@ -100,7 +100,7 @@ mod tests {
     fn test_hash_after_insert() {
         let username = "Chris";
 
-        let database = Database::from_memory().expect("valid database");
+        let database = Database::plain().expect("valid database");
         User::create_table(&database).expect("valid table");
 
         let index = User {

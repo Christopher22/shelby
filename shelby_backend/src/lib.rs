@@ -196,14 +196,14 @@ pub(crate) mod macros {
 
                     #[test]
                     fn test_insert_automatically() {
-                        let database = crate::Database::from_memory().expect("valid database");
+                        let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
                         $name::default().insert(&database).expect("insert sucessfull");
                     }
 
                     #[test]
                     fn test_select_automatically() {
-                        let database = crate::Database::from_memory().expect("valid database");
+                        let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
                         let example = $name::default();
@@ -270,7 +270,7 @@ pub(crate) mod macros {
 
         #[test]
         fn test_insert() {
-            let database = Database::from_memory().expect("valid database");
+            let database = Database::plain().expect("valid database");
             Test::create_table(&database).expect("valid table");
 
             Test {

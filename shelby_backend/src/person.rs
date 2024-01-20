@@ -98,7 +98,7 @@ mod membership_tests {
         (PrimaryKey<Person>, PrimaryKey<Person>, PrimaryKey<Person>),
         PrimaryKey<Group>,
     ) {
-        let database = Database::from_memory().expect("valid database");
+        let database = Database::plain().expect("valid database");
         Membership::create_table(&database).expect("valid table");
 
         let p1 = Person {

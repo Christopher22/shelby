@@ -11,3 +11,5 @@ chrono = { version = "0.4", features = ["serde"] }
 paste = "1.0"
 concat-with = "0.2"
 ring = "0.17"
+rusqlite_migration = "1.1.0"
+const_format = "0.2"
