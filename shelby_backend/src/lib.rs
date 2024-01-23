@@ -1,11 +1,13 @@
 mod database;
 pub mod document;
+mod error;
 pub mod person;
 pub mod user;
 
 use serde::{Deserialize, Serialize};
 
 pub use self::database::Database;
+pub use self::error::Error;
 
 /// A record with associated, numerical primary key.
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,11 +60,11 @@ impl<T: IndexableDatebaseEntry> Default for PrimaryKey<T> {
 }
 
 pub trait Dependency {
-    fn create_dependencies(database: &Database) -> Result<(), rusqlite::Error>;
+    fn create_dependencies(database: &Database) -> Result<(), Error>;
 }
 
 impl Dependency for () {
-    fn create_dependencies(_: &Database) -> Result<(), rusqlite::Error> {
+    fn create_dependencies(_: &Database) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -71,12 +73,12 @@ impl<T> Dependency for T
 where
     T: DatabaseEntry,
 {
-    fn create_dependencies(database: &Database) -> Result<(), rusqlite::Error> {
+    fn create_dependencies(database: &Database) -> Result<(), Error> {
         T::DependsOn::create_dependencies(database)?;
-        database
+        Ok(database
             .connection
             .execute(T::STATEMENT_CREATE_TABLE, ())
-            .map(|_| ())
+            .map(|_| ())?)
     }
 }
 
@@ -85,9 +87,9 @@ where
     T1: Dependency,
     T2: Dependency,
 {
-    fn create_dependencies(database: &Database) -> Result<(), rusqlite::Error> {
+    fn create_dependencies(database: &Database) -> Result<(), Error> {
         T1::create_dependencies(database)?;
-        T2::create_dependencies(database)
+        Ok(T2::create_dependencies(database)?)
     }
 }
 
@@ -99,8 +101,8 @@ pub trait DatabaseEntry: Sized {
     const STATEMENT_CREATE_TABLE: &'static str;
 
     /// Create the required table and all dependencies.
-    fn create_table(database: &Database) -> Result<(), rusqlite::Error> {
-        Self::create_dependencies(database)
+    fn create_table(database: &Database) -> Result<(), Error> {
+        Ok(Self::create_dependencies(database)?)
     }
 }
 
@@ -127,23 +129,20 @@ pub trait IndexableDatebaseEntry: DatabaseEntry {
     fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> Record<Self>;
 
     /// Select an element and parse it.
-    fn select(
-        database: &crate::Database,
-        index: PrimaryKey<Self>,
-    ) -> Result<Record<Self>, rusqlite::Error> {
-        database
+    fn select(database: &crate::Database, index: PrimaryKey<Self>) -> Result<Record<Self>, Error> {
+        Ok(database
             .connection
             .query_row(Self::STATEMENT_SELECT, (index.0,), |row| {
                 Self::SelectValue::try_from(row).map(Self::deserialize_sql)
-            })
+            })?)
     }
 
     /// Insert the value with a given primary key.
-    fn insert(&self, database: &crate::Database) -> Result<PrimaryKey<Self>, rusqlite::Error> {
-        database
+    fn insert(&self, database: &crate::Database) -> Result<PrimaryKey<Self>, Error> {
+        Ok(database
             .connection
             .execute(Self::STATEMENT_INSERT, self.serialize_sql())
-            .map(|_| PrimaryKey::from(database.connection.last_insert_rowid()))
+            .map(|_| PrimaryKey::from(database.connection.last_insert_rowid()))?)
     }
 }
 

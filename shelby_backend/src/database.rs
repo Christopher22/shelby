@@ -1,4 +1,4 @@
-use crate::DatabaseEntry;
+use crate::{DatabaseEntry, Error};
 use rusqlite::Connection;
 use rusqlite_migration::{Migrations, M};
 
@@ -8,18 +8,18 @@ pub struct Database {
 
 impl Database {
     /// Open the database in memory.
-    pub fn in_memory() -> Result<Self, rusqlite::Error> {
-        Connection::open_in_memory().and_then(|connection| {
+    pub fn in_memory() -> Result<Self, Error> {
+        Ok(Connection::open_in_memory().and_then(|connection| {
             let mut database = Database { connection };
             database.prepare_connection()?;
             Ok(database)
-        })
+        })?)
     }
 
     /// Get a raw SQLite database. This should only be relevant for unit testing purposes.
     #[cfg(test)]
-    pub fn plain() -> Result<Self, rusqlite::Error> {
-        Connection::open_in_memory().map(|connection| Database { connection })
+    pub fn plain() -> Result<Self, Error> {
+        Ok(Connection::open_in_memory().map(|connection| Database { connection })?)
     }
 
     fn prepare_connection(&mut self) -> Result<(), rusqlite::Error> {
