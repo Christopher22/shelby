@@ -1,4 +1,5 @@
 mod database;
+pub mod document;
 pub mod person;
 pub mod user;
 
