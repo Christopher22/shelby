@@ -16,6 +16,7 @@ where
     T: IndexableDatebaseEntry,
 {
     pub identifier: PrimaryKey<T>,
+    #[serde(flatten)]
     pub value: T,
 }
 
@@ -32,7 +33,11 @@ where
 
 /// The primary key of a record.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PrimaryKey<T: IndexableDatebaseEntry>(pub(crate) i64, std::marker::PhantomData<T>);
+#[serde(transparent)]
+pub struct PrimaryKey<T: IndexableDatebaseEntry>(
+    pub(crate) i64,
+    #[serde(skip)] std::marker::PhantomData<T>,
+);
 
 impl<T: IndexableDatebaseEntry> From<i64> for PrimaryKey<T> {
     fn from(value: i64) -> Self {
@@ -222,7 +227,7 @@ pub(crate) mod macros {
 
     #[cfg(test)]
     mod test {
-        use crate::{Database, DatabaseEntry, IndexableDatebaseEntry};
+        use crate::{Database, DatabaseEntry, IndexableDatebaseEntry, Record};
 
         crate::macros::make_struct!(
             Test (Table: "tests") depends on () => {
@@ -280,6 +285,23 @@ pub(crate) mod macros {
             }
             .insert(&database)
             .expect("insert sucessfull");
+        }
+
+        #[test]
+        fn test_serialization() {
+            let record = Record {
+                identifier: crate::PrimaryKey::from(0),
+                value: Test {
+                    bool_value: false,
+                    string_value: String::from("ABC"),
+                    integer_value: 42,
+                },
+            };
+
+            assert_eq!(
+                serde_json::to_string(&record).expect("valid serialization"),
+                "{\"identifier\":0,\"bool_value\":false,\"string_value\":\"ABC\",\"integer_value\":42}"
+            );
         }
     }
 }
