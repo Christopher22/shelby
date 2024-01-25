@@ -4,6 +4,7 @@ mod error;
 pub mod person;
 pub mod user;
 
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
 pub use self::database::Database;
@@ -116,6 +117,9 @@ pub trait IndexableDatebaseEntry: DatabaseEntry {
     /// The statement for select WITH explicit primary key.
     const STATEMENT_SELECT: &'static str;
 
+    /// The statement for selecting all entries.
+    const STATEMENT_SELECT_ALL: &'static str;
+
     /// The statement for insert the InsertValue WITHOUT explicit primary key.
     const STATEMENT_INSERT: &'static str;
 
@@ -140,6 +144,26 @@ pub trait IndexableDatebaseEntry: DatabaseEntry {
             .query_row(Self::STATEMENT_SELECT, (index.0,), |row| {
                 Self::SelectValue::try_from(row).map(Self::deserialize_sql)
             })?)
+    }
+
+    /// Try to select a element which primary key was not validated.
+    fn try_select(database: &crate::Database, index: i64) -> Result<Option<Record<Self>>, Error> {
+        Ok(database
+            .connection
+            .query_row(Self::STATEMENT_SELECT, (index,), |row| {
+                Self::SelectValue::try_from(row).map(Self::deserialize_sql)
+            })
+            .optional()?)
+    }
+
+    /// Select all the elements from the database.
+    fn select_all(database: &crate::Database) -> Result<Vec<Record<Self>>, Error> {
+        let mut stmt = database.connection.prepare(Self::STATEMENT_SELECT_ALL)?;
+        let iterator = stmt.query_map((), |row| {
+            Self::SelectValue::try_from(row).map(Self::deserialize_sql)
+        })?;
+
+        Ok(iterator.filter_map(|value| value.ok()).collect())
     }
 
     /// Insert the value with a given primary key.
@@ -176,6 +200,7 @@ pub(crate) mod macros {
 
                 impl crate::IndexableDatebaseEntry for $name {
                     const STATEMENT_INSERT: &'static str = std::concat!("INSERT INTO ", $table_name, " (", concat_with::concat!(with ", ", $(stringify!($element)),*), ") VALUES (", concat_with::concat!(with ", ", $(crate::macros::question_mark!($element)),*), ")");
+                    const STATEMENT_SELECT_ALL: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name);
                     const STATEMENT_SELECT: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name, " WHERE id = ?");
 
                     type InsertValue<'a> = ($( &'a $ty ),*, );
@@ -216,6 +241,44 @@ pub(crate) mod macros {
                         let loaded_example = $name::select(&database, id).expect("valid sample");
 
                         assert_eq!(example, loaded_example.value)
+                    }
+
+                    #[test]
+                    fn test_select_all() {
+                        let database = crate::Database::plain().expect("valid database");
+                        $name::create_table(&database).expect("valid table");
+
+                        let example = $name::default();
+                        example.insert(&database).expect("insert sucessfull");
+
+                        let loaded_examples = $name::select_all(&database).expect("valid sample");
+                        assert_eq!(loaded_examples.len(), 1);
+                        assert_eq!(example, loaded_examples[0].value)
+                    }
+
+                    #[test]
+                    fn test_select_raw() {
+                        let database = crate::Database::plain().expect("valid database");
+                        $name::create_table(&database).expect("valid table");
+
+                        let example = $name::default();
+                        let id = example.insert(&database).expect("insert sucessfull");
+
+                        let loaded_example = $name::try_select(&database, id.0).expect("valid sample");
+                        assert_eq!(example, loaded_example.expect("existing element").value)
+                    }
+
+                    #[test]
+                    fn test_select_raw_noexisting() {
+                        const NONEXISTING_INDEX: i64 = 42;
+
+                        let database = crate::Database::plain().expect("valid database");
+                        $name::create_table(&database).expect("valid table");
+
+                        let index = $name::default().insert(&database).expect("insert sucessfull");
+                        assert_ne!(index.0, NONEXISTING_INDEX);
+
+                        assert!($name::try_select(&database, NONEXISTING_INDEX).expect("valid sample").is_none());
                     }
                 }
             }

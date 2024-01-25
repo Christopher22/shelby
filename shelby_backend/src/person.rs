@@ -1,4 +1,4 @@
-use crate::{DatabaseEntry, PrimaryKey};
+use crate::{DatabaseEntry, Error, PrimaryKey};
 
 crate::macros::make_struct!(
     Person (Table: "persons") depends on () => {
@@ -42,7 +42,7 @@ impl Membership {
     pub fn find_all_memberships(
         database: &crate::Database,
         person: PrimaryKey<Person>,
-    ) -> Result<Vec<Membership>, rusqlite::Error> {
+    ) -> Result<Vec<Membership>, Error> {
         let mut stmt = database
             .connection
             .prepare("SELECT group_id, updated, comment FROM memberships WHERE person_id = ?")?;
@@ -62,7 +62,7 @@ impl Membership {
     pub fn find_all_members(
         database: &crate::Database,
         group: PrimaryKey<Group>,
-    ) -> Result<Vec<Membership>, rusqlite::Error> {
+    ) -> Result<Vec<Membership>, Error> {
         let mut stmt = database
             .connection
             .prepare("SELECT person_id, updated, comment FROM memberships WHERE group_id = ?")?;
@@ -79,11 +79,11 @@ impl Membership {
         Ok(iterator.filter_map(|value| value.ok()).collect())
     }
 
-    pub fn insert(&self, database: &crate::Database) -> Result<usize, rusqlite::Error> {
-        database.connection.execute(
+    pub fn insert(&self, database: &crate::Database) -> Result<usize, Error> {
+        Ok(database.connection.execute(
             "INSERT INTO memberships (person_id, group_id, updated, comment) VALUES (?, ?, ?, ?)",
             (self.person.0, self.group.0, &self.updated, &self.comment),
-        )
+        )?)
     }
 }
 
