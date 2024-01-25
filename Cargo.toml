@@ -8,6 +8,8 @@ edition = "2021"
 
 [dependencies]
 shelby_backend = { path = "shelby_backend" }
+rocket = { version = "0.5", features = ["json"] }
+paste = "1.0"
 
 [workspace]
 members = ["shelby_backend"]
