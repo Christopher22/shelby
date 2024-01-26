@@ -13,3 +13,17 @@ crate::macros::make_struct!(
         description: Option<String> => "STRING"
     }
 );
+
+#[cfg(test)]
+mod tests {
+    use super::Document;
+    use crate::IndexableDatebaseEntry;
+
+    #[test]
+    fn test_availability_in_default_migrations() {
+        let database = crate::Database::in_memory().expect("valid database");
+        Document::default()
+            .insert(&database)
+            .expect("insert sucessfull");
+    }
+}

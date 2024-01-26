@@ -44,6 +44,8 @@ impl Database {
             "; ",
             crate::user::User::STATEMENT_CREATE_TABLE,
             "; ",
+            crate::document::Document::STATEMENT_CREATE_TABLE,
+            "; ",
         ))
         .down(const_format::concatcp!(
             "DROP TABLE ",
