@@ -33,12 +33,20 @@ where
 }
 
 /// The primary key of a record.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct PrimaryKey<T: IndexableDatebaseEntry>(
     pub(crate) i64,
-    #[serde(skip)] std::marker::PhantomData<T>,
+    #[serde(skip)] std::marker::PhantomData<*const T>,
 );
+
+impl<T: IndexableDatebaseEntry> Clone for PrimaryKey<T> {
+    fn clone(&self) -> Self {
+        Self(self.0, std::marker::PhantomData)
+    }
+}
+
+impl<T: IndexableDatebaseEntry> Copy for PrimaryKey<T> {}
 
 impl<T: IndexableDatebaseEntry> From<i64> for PrimaryKey<T> {
     fn from(value: i64) -> Self {
@@ -55,13 +63,6 @@ impl<T: IndexableDatebaseEntry> rusqlite::ToSql for PrimaryKey<T> {
 impl<T: IndexableDatebaseEntry> rusqlite::types::FromSql for PrimaryKey<T> {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         i64::column_result(value).map(PrimaryKey::from)
-    }
-}
-
-#[cfg(test)]
-impl<T: IndexableDatebaseEntry> Default for PrimaryKey<T> {
-    fn default() -> Self {
-        Self(0, std::marker::PhantomData)
     }
 }
 
@@ -175,6 +176,18 @@ pub trait IndexableDatebaseEntry: DatabaseEntry {
     }
 }
 
+#[cfg(test)]
+pub trait TestGenerator: DatabaseEntry {
+    fn create_example(database: &crate::Database) -> Self;
+}
+
+#[cfg(test)]
+impl<T: DatabaseEntry + Default> TestGenerator for T {
+    fn create_example(_: &crate::Database) -> Self {
+        Default::default()
+    }
+}
+
 pub(crate) mod macros {
     macro_rules! question_mark {
         ($name: ident) => {
@@ -182,11 +195,12 @@ pub(crate) mod macros {
         };
     }
 
+    /// Create a indexable database entry.
     macro_rules! make_struct {
-        ($name: ident (Table: $table_name: expr) depends on $dependencies: ty => { $($element: ident: $ty: ty => $value: expr),* } $( ($additional_conditions: expr) )?) => {
+        ($name: ident (Table $( with derived $derived: ident )?: $table_name: expr) depends on $dependencies: ty => { $($element: ident: $ty: ty => $value: expr),* } $( ($additional_conditions: expr) )?) => {
             paste::paste! {
                 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-                #[cfg_attr(test, derive(Default))]
+                $(#[derive($derived)])?
                 pub struct $name {
                     $( pub $element: $ty),*
                 }
@@ -221,14 +235,14 @@ pub(crate) mod macros {
 
                 #[cfg(test)]
                 mod [< "test_" $table_name >] {
-                    use crate::{DatabaseEntry, IndexableDatebaseEntry};
+                    use crate::{DatabaseEntry, IndexableDatebaseEntry, TestGenerator};
                     use super::$name;
 
                     #[test]
                     fn test_insert_automatically() {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
-                        $name::default().insert(&database).expect("insert sucessfull");
+                        $name::create_example(&database).insert(&database).expect("insert sucessfull");
                     }
 
                     #[test]
@@ -236,7 +250,7 @@ pub(crate) mod macros {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
-                        let example = $name::default();
+                        let example = $name::create_example(&database);
                         let id = example.insert(&database).expect("insert sucessfull");
                         let loaded_example = $name::select(&database, id).expect("valid sample");
 
@@ -248,7 +262,7 @@ pub(crate) mod macros {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
-                        let example = $name::default();
+                        let example = $name::create_example(&database);
                         example.insert(&database).expect("insert sucessfull");
 
                         let loaded_examples = $name::select_all(&database).expect("valid sample");
@@ -261,7 +275,7 @@ pub(crate) mod macros {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
-                        let example = $name::default();
+                        let example = $name::create_example(&database);
                         let id = example.insert(&database).expect("insert sucessfull");
 
                         let loaded_example = $name::try_select(&database, id.0).expect("valid sample");
@@ -275,7 +289,7 @@ pub(crate) mod macros {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
-                        let index = $name::default().insert(&database).expect("insert sucessfull");
+                        let index = $name::create_example(&database).insert(&database).expect("insert sucessfull");
                         assert_ne!(index.0, NONEXISTING_INDEX);
 
                         assert!($name::try_select(&database, NONEXISTING_INDEX).expect("valid sample").is_none());
@@ -293,7 +307,7 @@ pub(crate) mod macros {
         use crate::{Database, DatabaseEntry, IndexableDatebaseEntry, Record};
 
         crate::macros::make_struct!(
-            Test (Table: "tests") depends on () => {
+            Test (Table with derived Default: "tests") depends on () => {
                 bool_value: bool => "BOOL NOT NULL",
                 string_value: String  => "STRING NOT NULL",
                 integer_value: u32 => "INTEGER NOT NULL"
@@ -302,7 +316,7 @@ pub(crate) mod macros {
 
         // We need to check values with single elements are properly serialized, too.
         crate::macros::make_struct!(
-            TestSingleElement (Table: "tests_single") depends on () => {
+            TestSingleElement (Table with derived Default: "tests_single") depends on () => {
                 string_value: String  => "STRING NOT NULL"
             }
         );

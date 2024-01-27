@@ -69,7 +69,7 @@ impl rusqlite::types::FromSql for PasswordHash {
 }
 
 crate::macros::make_struct!(
-    User (Table: "users") depends on Person => {
+    User (Table with derived Default: "users") depends on Person => {
         username: String => "STRING NOT NULL",
         password_hash: PasswordHash => "BLOB NOT NULL",
         active: bool => "BOOL NOT NULL",

@@ -11,18 +11,37 @@ crate::macros::make_struct!(
         recieved: DateTime<Utc> => "DATETIME NOT NULL",
         processed: DateTime<Utc> => "DATETIME NOT NULL",
         description: Option<String> => "STRING"
-    }
+    } ("FOREIGN KEY(processed_by) REFERENCES users(id), FOREIGN KEY(from_person) REFERENCES persons(id), FOREIGN KEY(to_person) REFERENCES persons(id)")
 );
 
 #[cfg(test)]
 mod tests {
+    use chrono::DateTime;
+
     use super::Document;
-    use crate::IndexableDatebaseEntry;
+    use crate::{person::Person, user::User, IndexableDatebaseEntry, TestGenerator};
+
+    impl crate::TestGenerator for Document {
+        fn create_example(database: &crate::Database) -> Self {
+            let person = Person::default().insert(&database).expect("valid person");
+            let user = User::default().insert(&database).expect("valid user");
+
+            Document {
+                document: Vec::default(),
+                processed_by: user,
+                from_person: person,
+                to_person: person,
+                recieved: DateTime::default(),
+                processed: DateTime::default(),
+                description: None,
+            }
+        }
+    }
 
     #[test]
     fn test_availability_in_default_migrations() {
         let database = crate::Database::in_memory().expect("valid database");
-        Document::default()
+        Document::create_example(&database)
             .insert(&database)
             .expect("insert sucessfull");
     }

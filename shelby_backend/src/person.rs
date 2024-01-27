@@ -1,7 +1,7 @@
 use crate::{DatabaseEntry, Error, PrimaryKey};
 
 crate::macros::make_struct!(
-    Person (Table: "persons") depends on () => {
+    Person (Table with derived Default: "persons") depends on () => {
         name: String => "STRING NOT NULL",
         address: String => "STRING NOT NULL",
         email: Option<String> => "STRING",
@@ -11,7 +11,7 @@ crate::macros::make_struct!(
 );
 
 crate::macros::make_struct!(
-    Group (Table: "groups") depends on () => {
+    Group (Table with derived Default: "groups") depends on () => {
         description: String => "STRING NOT NULL"
     }
 );
