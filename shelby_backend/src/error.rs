@@ -2,6 +2,20 @@
 #[derive(Debug, PartialEq)]
 pub struct Error(rusqlite::Error);
 
+impl Error {
+    /// Allow the check if the error results from an invalid jet specified foreign key.
+    pub fn is_constraint_violation(&self) -> bool {
+        match &self.0 {
+            rusqlite::Error::SqliteFailure(error, _) => {
+                println!("{}", error);
+                error.code == rusqlite::ffi::ErrorCode::ConstraintViolation
+            }
+            _ => false,
+        }
+    }
+}
+
+// ToDo: Check forign key constraint
 impl From<rusqlite::Error> for Error {
     fn from(value: rusqlite::Error) -> Self {
         Error(value)
@@ -15,3 +29,22 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+#[cfg(test)]
+mod tests {
+    use crate::{user::User, IndexableDatebaseEntry};
+
+    #[test]
+    fn test_foreign_key_error() {
+        let database = crate::Database::in_memory().expect("valid database");
+        let document = User {
+            related_to: Some(crate::PrimaryKey::from(42)),
+            ..User::default()
+        };
+
+        assert!(document
+            .insert(&database)
+            .expect_err("insertion despite invalid foreign key")
+            .is_constraint_violation())
+    }
+}

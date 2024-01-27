@@ -7,6 +7,7 @@ use std::sync::Mutex;
 
 use rocket::{serde::json::Json, State};
 use shelby_backend::{
+    document::Document,
     person::{Group, Person},
     Database, IndexableDatebaseEntry, PrimaryKey, Record,
 };
@@ -51,8 +52,8 @@ macro_rules! create_routes {
 }
 
 macro_rules! write_routes {
-    ($($function_name: ident),*) => { paste::paste! {
-        routes![index, $(
+    ($($function_name: ident),* + $($additional: ident),*) => { paste::paste! {
+        routes![$($additional),*, $(
             [< add_ $function_name >], [< get_all_ $function_name s >], [< get_ $function_name _by_id>]
         ),*]
     }};
@@ -65,11 +66,12 @@ fn index() -> &'static str {
 
 create_routes!("/persons" => Person (person));
 create_routes!("/groups" => Group (group));
+create_routes!("/documents" => Document (document));
 
 #[launch]
 fn rocket() -> _ {
     let database = Database::in_memory().expect("Valid database");
     rocket::build()
         .manage(Mutex::new(database))
-        .mount("/", write_routes!(person, group))
+        .mount("/", write_routes!(person, group, document + index))
 }
