@@ -40,6 +40,15 @@ pub struct PrimaryKey<T: IndexableDatebaseEntry>(
     #[serde(skip)] std::marker::PhantomData<*const T>,
 );
 
+unsafe impl<T: IndexableDatebaseEntry> std::marker::Send for PrimaryKey<T> {}
+unsafe impl<T: IndexableDatebaseEntry> std::marker::Sync for PrimaryKey<T> {}
+
+impl<T: IndexableDatebaseEntry> std::fmt::Display for PrimaryKey<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl<T: IndexableDatebaseEntry> Clone for PrimaryKey<T> {
     fn clone(&self) -> Self {
         Self(self.0, std::marker::PhantomData)
@@ -176,14 +185,14 @@ pub trait IndexableDatebaseEntry: DatabaseEntry {
     }
 }
 
-#[cfg(test)]
-pub trait TestGenerator: DatabaseEntry {
-    fn create_example(database: &crate::Database) -> Self;
+/// An trait for creating a default for objects with complex constraints like foreign keys requiering database access.
+pub trait DefaultGenerator: DatabaseEntry {
+    /// Create the default element.
+    fn create_default(database: &crate::Database) -> Self;
 }
 
-#[cfg(test)]
-impl<T: DatabaseEntry + Default> TestGenerator for T {
-    fn create_example(_: &crate::Database) -> Self {
+impl<T: DatabaseEntry + Default> DefaultGenerator for T {
+    fn create_default(_: &crate::Database) -> Self {
         Default::default()
     }
 }
@@ -235,14 +244,14 @@ pub(crate) mod macros {
 
                 #[cfg(test)]
                 mod [< "test_" $table_name >] {
-                    use crate::{DatabaseEntry, IndexableDatebaseEntry, TestGenerator};
+                    use crate::{DatabaseEntry, IndexableDatebaseEntry, DefaultGenerator};
                     use super::$name;
 
                     #[test]
                     fn test_insert_automatically() {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
-                        $name::create_example(&database).insert(&database).expect("insert sucessfull");
+                        $name::create_default(&database).insert(&database).expect("insert sucessfull");
                     }
 
                     #[test]
@@ -250,7 +259,7 @@ pub(crate) mod macros {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
-                        let example = $name::create_example(&database);
+                        let example = $name::create_default(&database);
                         let id = example.insert(&database).expect("insert sucessfull");
                         let loaded_example = $name::select(&database, id).expect("valid sample");
 
@@ -262,7 +271,7 @@ pub(crate) mod macros {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
-                        let example = $name::create_example(&database);
+                        let example = $name::create_default(&database);
                         example.insert(&database).expect("insert sucessfull");
 
                         let loaded_examples = $name::select_all(&database).expect("valid sample");
@@ -275,7 +284,7 @@ pub(crate) mod macros {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
-                        let example = $name::create_example(&database);
+                        let example = $name::create_default(&database);
                         let id = example.insert(&database).expect("insert sucessfull");
 
                         let loaded_example = $name::try_select(&database, id.0).expect("valid sample");
@@ -289,7 +298,7 @@ pub(crate) mod macros {
                         let database = crate::Database::plain().expect("valid database");
                         $name::create_table(&database).expect("valid table");
 
-                        let index = $name::create_example(&database).insert(&database).expect("insert sucessfull");
+                        let index = $name::create_default(&database).insert(&database).expect("insert sucessfull");
                         assert_ne!(index.0, NONEXISTING_INDEX);
 
                         assert!($name::try_select(&database, NONEXISTING_INDEX).expect("valid sample").is_none());

@@ -19,10 +19,10 @@ mod tests {
     use chrono::DateTime;
 
     use super::Document;
-    use crate::{person::Person, user::User, IndexableDatebaseEntry, TestGenerator};
+    use crate::{person::Person, user::User, DefaultGenerator, IndexableDatebaseEntry};
 
-    impl crate::TestGenerator for Document {
-        fn create_example(database: &crate::Database) -> Self {
+    impl crate::DefaultGenerator for Document {
+        fn create_default(database: &crate::Database) -> Self {
             let person = Person::default().insert(&database).expect("valid person");
             let user = User::default().insert(&database).expect("valid user");
 
@@ -41,7 +41,7 @@ mod tests {
     #[test]
     fn test_availability_in_default_migrations() {
         let database = crate::Database::in_memory().expect("valid database");
-        Document::create_example(&database)
+        Document::create_default(&database)
             .insert(&database)
             .expect("insert sucessfull");
     }
