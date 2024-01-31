@@ -33,19 +33,86 @@ where
 }
 
 /// The primary key of a record.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(transparent)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PrimaryKey<T: IndexableDatebaseEntry>(
     pub(crate) i64,
-    #[serde(skip)] std::marker::PhantomData<*const T>,
+    std::marker::PhantomData<*const T>,
 );
 
 unsafe impl<T: IndexableDatebaseEntry> std::marker::Send for PrimaryKey<T> {}
 unsafe impl<T: IndexableDatebaseEntry> std::marker::Sync for PrimaryKey<T> {}
 
+#[derive(Default)]
+struct PrimaryKeyVisitor<T: IndexableDatebaseEntry>(std::marker::PhantomData<*const T>);
+
+impl<'de, T: IndexableDatebaseEntry> serde::de::Visitor<'de> for PrimaryKeyVisitor<T> {
+    type Value = PrimaryKey<T>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            formatter,
+            "a path in the form of '/{}/(<number>' or a u64",
+            T::TABLE_NAME
+        )
+    }
+
+    fn visit_i64<E>(self, primary_key: i64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(PrimaryKey::from(primary_key))
+    }
+
+    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        let mut iterator = v.split('/').rev();
+
+        let primary_key: i64 =
+            iterator
+                .next()
+                .and_then(|value| value.parse().ok())
+                .ok_or(E::invalid_value(
+                    serde::de::Unexpected::Other("invalid number"),
+                    &self,
+                ))?;
+
+        match iterator.next() {
+            Some(value) if value == T::TABLE_NAME => Ok(PrimaryKey::from(primary_key)),
+            Some(_) => Err(E::invalid_value(
+                serde::de::Unexpected::Other("invalid identifier"),
+                &self,
+            )),
+            None => Err(E::invalid_value(
+                serde::de::Unexpected::Other("invalid path"),
+                &self,
+            )),
+        }
+    }
+}
+
+impl<'de, T: IndexableDatebaseEntry> serde::Deserialize<'de> for PrimaryKey<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(PrimaryKeyVisitor::<T>(std::marker::PhantomData))
+    }
+}
+
+impl<T: IndexableDatebaseEntry> serde::Serialize for PrimaryKey<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 impl<T: IndexableDatebaseEntry> std::fmt::Display for PrimaryKey<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "/{}/{}", T::TABLE_NAME, self.0)
     }
 }
 
@@ -313,7 +380,7 @@ pub(crate) mod macros {
 
     #[cfg(test)]
     mod test {
-        use crate::{Database, DatabaseEntry, IndexableDatebaseEntry, Record};
+        use crate::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey, Record};
 
         crate::macros::make_struct!(
             Test (Table with derived Default: "tests") depends on () => {
@@ -386,7 +453,25 @@ pub(crate) mod macros {
 
             assert_eq!(
                 serde_json::to_string(&record).expect("valid serialization"),
-                "{\"identifier\":0,\"bool_value\":false,\"string_value\":\"ABC\",\"integer_value\":42}"
+                "{\"identifier\":\"/tests/0\",\"bool_value\":false,\"string_value\":\"ABC\",\"integer_value\":42}"
+            );
+        }
+
+        #[test]
+        fn primary_key_serialization() {
+            let primary_key: PrimaryKey<Test> = crate::PrimaryKey::from(0);
+            assert_eq!(
+                serde_json::to_string(&primary_key).expect("str"),
+                "\"/tests/0\""
+            )
+        }
+
+        #[test]
+        fn primary_key_deserialization() {
+            const TEST_INPUT: &'static str = "\"/tests/42\"";
+            assert_eq!(
+                serde_json::from_str::<crate::PrimaryKey<Test>>(TEST_INPUT).expect("valid key"),
+                crate::PrimaryKey::from(42)
             );
         }
     }
