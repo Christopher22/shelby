@@ -33,7 +33,10 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
         // ToDo: Log here
         match self {
             Error::ConstraintViolation => Status::BadRequest.respond_to(request),
-            Error::DatabaseError(_) => Status::InternalServerError.respond_to(request),
+            Error::DatabaseError(database_error) => {
+                eprintln!("{}", database_error);
+                Status::InternalServerError.respond_to(request)
+            },
             Error::NotFound => Status::NotFound.respond_to(request),
         }
     }
