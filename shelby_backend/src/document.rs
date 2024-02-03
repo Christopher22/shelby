@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use crate::{person::Person, user::User, PrimaryKey};
+use crate::{person::Person, user::User, DefaultGenerator, IndexableDatebaseEntry, PrimaryKey};
 
 crate::macros::make_struct!(
     Document (Table: "documents") depends on (Person, User)  => {
@@ -14,29 +14,27 @@ crate::macros::make_struct!(
     } ("FOREIGN KEY(processed_by) REFERENCES users(id), FOREIGN KEY(from_person) REFERENCES persons(id), FOREIGN KEY(to_person) REFERENCES persons(id)")
 );
 
-#[cfg(test)]
-mod tests {
-    use chrono::DateTime;
+impl DefaultGenerator for Document {
+    fn create_default(database: &crate::Database) -> Self {
+        let person = Person::default().insert(&database).expect("valid person");
+        let user = User::default().insert(&database).expect("valid user");
 
-    use super::Document;
-    use crate::{person::Person, user::User, DefaultGenerator, IndexableDatebaseEntry};
-
-    impl crate::DefaultGenerator for Document {
-        fn create_default(database: &crate::Database) -> Self {
-            let person = Person::default().insert(&database).expect("valid person");
-            let user = User::default().insert(&database).expect("valid user");
-
-            Document {
-                document: Vec::default(),
-                processed_by: user,
-                from_person: person,
-                to_person: person,
-                recieved: DateTime::default(),
-                processed: DateTime::default(),
-                description: None,
-            }
+        Document {
+            document: Vec::default(),
+            processed_by: user,
+            from_person: person,
+            to_person: person,
+            recieved: DateTime::default(),
+            processed: DateTime::default(),
+            description: None,
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Document;
+    use crate::{DefaultGenerator, IndexableDatebaseEntry};
 
     #[test]
     fn test_availability_in_default_migrations() {

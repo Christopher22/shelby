@@ -190,7 +190,7 @@ pub trait DatabaseEntry: Sized {
 }
 
 /// An value insertable in the database.
-pub trait IndexableDatebaseEntry: DatabaseEntry {
+pub trait IndexableDatebaseEntry: DefaultGenerator {
     /// The statement for select WITH explicit primary key.
     const STATEMENT_SELECT: &'static str;
 
