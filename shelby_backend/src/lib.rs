@@ -11,7 +11,7 @@ pub use self::database::Database;
 pub use self::error::Error;
 
 /// A record with associated, numerical primary key.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Record<T>
 where
     T: IndexableDatebaseEntry,
@@ -455,6 +455,23 @@ pub(crate) mod macros {
                 serde_json::to_string(&record).expect("valid serialization"),
                 "{\"identifier\":\"/tests/0\",\"bool_value\":false,\"string_value\":\"ABC\",\"integer_value\":42}"
             );
+        }
+
+        #[test]
+        fn test_deserialization() {
+            let record = Record {
+                identifier: crate::PrimaryKey::from(0),
+                value: Test {
+                    bool_value: false,
+                    string_value: String::from("ABC"),
+                    integer_value: 42,
+                },
+            };
+
+            let serialized = serde_json::to_string(&record).expect("valid serialization");
+
+            let deserialized: Record<Test> = serde_json::from_str(&serialized).expect("valid json");
+            assert_eq!(record, deserialized);
         }
 
         #[test]
