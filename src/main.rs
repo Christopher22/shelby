@@ -1,10 +1,15 @@
+#![allow(non_snake_case)] // Required due to https://github.com/rwf2/Rocket/issues/1003
+
 #[macro_use]
 extern crate rocket;
 
-mod error;
 use std::sync::Mutex;
 
-use rocket::{serde::json::Json, State, response::status};
+mod auth;
+mod error;
+
+use auth::{login, logout, AuthenticatedUser};
+use rocket::{response::status, serde::json::Json, State};
 use shelby_backend::{
     document::Document,
     person::{Group, Person},
@@ -19,6 +24,7 @@ macro_rules! create_routes {
         paste::paste! {
             #[post($path, format = "json", data = "<database_entry>")]
             fn [< add_ $function_name >](
+                _user: AuthenticatedUser,
                 database_entry: Json<$database_entry>,
                 state: &DatabaseState,
             ) -> Result<status::Created<String>, Error> {
@@ -30,14 +36,14 @@ macro_rules! create_routes {
             }
 
             #[get($path)]
-            fn [< get_all_ $function_name s >](state: &DatabaseState) -> Result<Json<Vec<Record<$database_entry>>>, Error> {
+            fn [< get_all_ $function_name s >](_user: AuthenticatedUser, state: &DatabaseState) -> Result<Json<Vec<Record<$database_entry>>>, Error> {
                 Ok(Json($database_entry::select_all(
                     &state.lock().expect("database mutex"),
                 )?))
             }
 
             #[get($path_id)]
-            fn [< get_ $function_name _by_id>](id: i64, state: &DatabaseState) -> Result<Json<Record<$database_entry>>, Error> {
+            fn [< get_ $function_name _by_id>](_user: AuthenticatedUser, id: i64, state: &DatabaseState) -> Result<Json<Record<$database_entry>>, Error> {
                 match $database_entry::try_select(
                     &state.lock().expect("database mutex"),
                     id
@@ -55,10 +61,10 @@ macro_rules! create_routes {
 
                 type TargetEntity = super::$database_entry;
                 const ACCESS_POINT: &'static str = $path;
-                
+
                 #[test]
                 fn test_get_empty() {
-                    let client = Client::tracked(rocket()).expect("valid client");
+                    let client = super::tests::login(rocket());
                     let response = client.get(ACCESS_POINT).dispatch();
                     assert_eq!(response.status(), Status::Ok);
 
@@ -74,7 +80,7 @@ macro_rules! create_routes {
                         TargetEntity::create_default(&database.lock().expect("database mutex"))
                     };
 
-                    let client = Client::tracked(engine).expect("valid client");
+                    let client = super::tests::login(engine);
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
                     assert_eq!(creation_response.status(), Status::Created);
 
@@ -96,7 +102,7 @@ macro_rules! create_routes {
                         TargetEntity::create_default(&database.lock().expect("database mutex"))
                     };
 
-                    let client = Client::tracked(engine).expect("valid client");
+                    let client = super::tests::login(engine);
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
                     assert_eq!(creation_response.status(), Status::Created);
 
@@ -112,11 +118,47 @@ macro_rules! create_routes {
 
                 #[test]
                 fn test_get_by_id_not_found() {
-                    let engine = rocket();
-                    let client = Client::tracked(engine).expect("valid client");
-                    
+                    let client = super::tests::login(rocket());
                     let response = client.get(format!("{}/42", ACCESS_POINT)).dispatch();
                     assert_eq!(response.status(), Status::NotFound);
+                }
+
+                #[test]
+                fn test_get_empty_unauthorized() {
+                    let client = Client::tracked(rocket()).expect("valid client");
+                    let response = client.get(ACCESS_POINT).dispatch();
+                    assert_eq!(response.status(), Status::Unauthorized);
+                }
+
+                #[test]
+                fn test_get_unauthorized() {
+                    let engine = rocket();
+                    let database: &DatabaseState = State::get(&engine).expect("valid database");
+                    let example = TargetEntity::create_default(&database.lock().expect("database mutex"));
+
+                    let client = Client::tracked(engine).expect("valid client");
+                    let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
+                    assert_eq!(creation_response.status(), Status::Unauthorized);
+                }
+
+                #[test]
+                fn test_get_by_id_non_existing_unauthorized() {
+                    let engine = rocket();
+                    let client = Client::tracked(engine).expect("valid client");
+
+                    let response = client.get(format!("{}/42", ACCESS_POINT)).dispatch();
+                    assert_eq!(response.status(), Status::Unauthorized);
+                }
+
+                #[test]
+                fn test_logout() {
+                    let client = super::tests::login(rocket());
+
+                    let login_response = client.get("/users/logout").dispatch();
+                    assert_eq!(login_response.status(), rocket::http::Status::SeeOther);
+
+                    let response = client.get(ACCESS_POINT).dispatch();
+                    assert_eq!(response.status(), Status::Unauthorized);
                 }
             }
         }
@@ -142,9 +184,65 @@ create_routes!("/documents" ("/documents/<id>") => Document (document));
 
 #[launch]
 fn rocket() -> _ {
-    let database = Database::in_memory().expect("Valid database");
-    rocket::build().manage(Mutex::new(database)).mount(
+    let database = Database::in_memory().expect("valid database");
+    let config = rocket::Config {
+        secret_key: rocket::config::SecretKey::generate().expect("safe RNG available"),
+        ..Default::default()
+    };
+
+    let figment = rocket::Config::figment()
+        .merge(rocket::figment::providers::Serialized::defaults(config));
+
+    rocket::custom(figment).manage(Mutex::new(database)).mount(
         "/",
-        write_routes!(person, group, document + (index)),
+        write_routes!(person, group, document + (index, login, logout)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{rocket, DatabaseState, auth};
+    use rocket::{http::ContentType, local::blocking::Client, State};
+    use shelby_backend::{DefaultGenerator, IndexableDatebaseEntry};
+
+    pub fn login<P: rocket::Phase>(engine: rocket::Rocket<P>) -> Client {
+        let credentials = auth::Credentials {
+            user: String::from("Chris"),
+            password: String::from("test1234"),
+        };
+
+        let _ = {
+            let database_container: &DatabaseState = State::get(&engine).expect("valid database");
+            let database = database_container.lock().expect("database mutex");
+
+            let mut user = shelby_backend::user::User::create_default(&database);
+            user.username = String::from(&credentials.user);
+            user.password_hash =
+                shelby_backend::user::PasswordHash::new(&credentials.user, &credentials.password);
+            user.insert(&database).expect("user insertion sucessfull")
+        };
+
+        let client = Client::tracked(engine).expect("valid client");
+
+        // Log in
+        {
+            let creation_response = client.post("/users/login").header(ContentType::Form).body("user=Chris&password=test1234").dispatch();
+            assert_eq!(creation_response.status(), rocket::http::Status::SeeOther);
+        }
+
+        client
+    }
+
+    #[test]
+    fn test_login() {
+        login(rocket());
+    }
+
+    #[test]
+    fn test_logout_without_login() {
+        let client = Client::tracked(rocket()).expect("valid client");
+        let login_response = client.get("/users/logout").dispatch();
+        // We may thing about changing that
+        assert_eq!(login_response.status(), rocket::http::Status::SeeOther);
+    }
 }

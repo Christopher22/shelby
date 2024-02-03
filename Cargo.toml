@@ -4,11 +4,9 @@ name = "shelby"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 shelby_backend = { path = "shelby_backend" }
-rocket = { version = "0.5", features = ["json"] }
+rocket = { version = "0.5", features = ["json", "secrets"] }
 paste = "1.0"
 
 [workspace]

@@ -1,10 +1,11 @@
 use std::num::NonZeroU32;
 
 use rusqlite::types::ValueRef;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
 use crate::person::Person;
-use crate::PrimaryKey;
+use crate::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey, Record};
 
 static PBKDF2_ALGORITHM: ring::pbkdf2::Algorithm = ring::pbkdf2::PBKDF2_HMAC_SHA256;
 
@@ -78,10 +79,28 @@ crate::macros::make_struct!(
     } ("FOREIGN KEY(related_to) REFERENCES persons(id)")
 );
 
+impl User {
+    /// Select a user by its name.
+    pub fn select_by_name(
+        database: &Database,
+        name: impl AsRef<str>,
+    ) -> Result<Option<Record<Self>>, crate::Error> {
+        const SELECT_BY_NAME_QUERY: &'static str = const_format::formatcp!("SELECT * FROM {} WHERE username = ?", User::TABLE_NAME);
+
+        Ok(database
+            .connection
+            .query_row(SELECT_BY_NAME_QUERY, (name.as_ref(),), |row| {
+                <Self as IndexableDatebaseEntry>::SelectValue::try_from(row)
+                    .map(Self::deserialize_sql)
+            })
+            .optional()?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{PasswordHash, User};
-    use crate::{Database, DatabaseEntry, IndexableDatebaseEntry};
+    use crate::{Database, DatabaseEntry, DefaultGenerator, IndexableDatebaseEntry};
 
     #[test]
     fn test_hash() {
@@ -114,5 +133,35 @@ mod tests {
         let user = User::select(&database, index).expect("valid sample");
         assert_eq!(user.password_hash.matches(username, "test123"), false);
         assert_eq!(user.password_hash.matches(username, "test1234"), true);
+    }
+
+    #[test]
+    fn test_select_by_name() {
+        const USERNAME: &'static str = "Chris";
+        let database = Database::in_memory().expect("valid database");
+        
+        // Create something in the database
+        let user_id = {
+            let mut user = User::create_default(&database);
+            user.username = String::from(USERNAME);
+            user.insert(&database).expect("sucessful insert")
+        };
+
+        let found_user = User::select_by_name(&database, USERNAME).expect("select ok").expect("existing record");
+        assert_eq!(found_user.identifier, user_id);
+    }
+
+    #[test]
+    fn test_select_by_name_non_existing () {
+        const USERNAME: &'static str = "Chris";
+        let database = Database::in_memory().expect("valid database");
+        
+        let _ = {
+            let mut user = User::create_default(&database);
+            user.username = String::from(USERNAME);
+            user.insert(&database).expect("sucessful insert")
+        };
+
+        assert_eq!(User::select_by_name(&database, "Max").expect("select ok"), None)
     }
 }
