@@ -5,6 +5,7 @@ pub enum Error {
     DatabaseError(shelby_backend::Error),
     NotFound,
     ConstraintViolation,
+    WrongPassword
 }
 
 impl std::fmt::Display for Error {
@@ -13,6 +14,7 @@ impl std::fmt::Display for Error {
             Error::DatabaseError(error) => write!(f, "database error: {}", error),
             Error::NotFound => write!(f, "element not found"),
             Error::ConstraintViolation => write!(f, "invalid value"),
+            Error::WrongPassword => write!(f, "invalid password"),
         }
     }
 }
@@ -30,7 +32,6 @@ impl std::error::Error for Error {}
 
 impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
     fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'o> {
-        // ToDo: Log here
         match self {
             Error::ConstraintViolation => Status::BadRequest.respond_to(request),
             Error::DatabaseError(database_error) => {
@@ -38,6 +39,7 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
                 Status::InternalServerError.respond_to(request)
             },
             Error::NotFound => Status::NotFound.respond_to(request),
+            Error::WrongPassword => Status::Unauthorized.respond_to(request),
         }
     }
 }

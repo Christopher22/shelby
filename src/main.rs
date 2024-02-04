@@ -3,49 +3,103 @@
 #[macro_use]
 extern crate rocket;
 
-use std::sync::Mutex;
-
 mod auth;
 mod error;
 
 use auth::{login, logout, AuthenticatedUser};
-use rocket::{response::status, serde::json::Json, State};
+use rocket::{fs::NamedFile, response::status, serde::json::Json, State};
 use shelby_backend::{
     document::Document,
     person::{Group, Person},
-    Database, IndexableDatebaseEntry, Record,
+    Database, DefaultGenerator, IndexableDatebaseEntry, Record,
+};
+use std::{
+    future::Future,
+    path::{Path, PathBuf},
+    sync::Mutex,
 };
 
-type DatabaseState = State<Mutex<Database>>;
 pub use self::error::Error;
+
+struct Config {
+    database: Mutex<Database>,
+    public_assets: PathBuf,
+}
+
+impl Config {
+    pub const ENV_VARIBLE_PATH: &'static str = "SHELBY_ASSETS";
+
+    pub fn from_env(database: Database) -> Option<Self> {
+        let public_assets = std::env::var(Self::ENV_VARIBLE_PATH)
+            .ok()
+            .and_then(|value| {
+                let path = PathBuf::from(value);
+                match path.join("dashboard.html").is_file() && path.join("public").is_dir() {
+                    true => Some(path.join("public")),
+                    false => None,
+                }
+            })?;
+
+        Some(Config {
+            database: Mutex::new(database),
+            public_assets,
+        })
+    }
+
+    /// Get a (safe) NamedFile for a public asset.
+    fn private_assets(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> impl Future<Output = Result<NamedFile, std::io::Error>> {
+        NamedFile::open(
+            self.public_assets
+                .parent()
+                .expect("valid parent")
+                .join(path),
+        )
+    }
+
+    /// Get a (safe) NamedFile for a public asset.
+    fn public_assets(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> impl Future<Output = Result<NamedFile, std::io::Error>> {
+        NamedFile::open(self.public_assets.join(path))
+    }
+
+    /// Get a handle to the database.
+    fn database(&self) -> std::sync::MutexGuard<'_, Database> {
+        self.database.lock().expect("database mutex")
+    }
+}
 
 macro_rules! create_routes {
     ($path: literal ($path_id: literal) => $database_entry: ident ($function_name: ident)) => {
         paste::paste! {
-            #[post($path, format = "json", data = "<database_entry>")]
+            #[post($path, format = "json", data = "<database_entry>", rank = 3)]
             fn [< add_ $function_name >](
                 _user: AuthenticatedUser,
                 database_entry: Json<$database_entry>,
-                state: &DatabaseState,
+                state: &State<Config>,
             ) -> Result<status::Created<String>, Error> {
                 database_entry
                     .0
-                    .insert(&state.lock().expect("database mutex"))
+                    .insert(&state.database())
                     .map(|primary_key| status::Created::new(primary_key.to_string()))
                     .map_err(Error::from)
             }
 
-            #[get($path)]
-            fn [< get_all_ $function_name s >](_user: AuthenticatedUser, state: &DatabaseState) -> Result<Json<Vec<Record<$database_entry>>>, Error> {
+            #[get($path, rank = 3)]
+            fn [< get_all_ $function_name s >](_user: AuthenticatedUser, state: &State<Config>) -> Result<Json<Vec<Record<$database_entry>>>, Error> {
                 Ok(Json($database_entry::select_all(
-                    &state.lock().expect("database mutex"),
+                    &state.database()
                 )?))
             }
 
-            #[get($path_id)]
-            fn [< get_ $function_name _by_id>](_user: AuthenticatedUser, id: i64, state: &DatabaseState) -> Result<Json<Record<$database_entry>>, Error> {
+            #[get($path_id, rank = 3)]
+            fn [< get_ $function_name _by_id>](_user: AuthenticatedUser, id: i64, state: &State<Config>) -> Result<Json<Record<$database_entry>>, Error> {
                 match $database_entry::try_select(
-                    &state.lock().expect("database mutex"),
+                    &state.database(),
                     id
                 )? {
                     Some(value) => Ok(Json(value)),
@@ -55,7 +109,7 @@ macro_rules! create_routes {
 
             #[cfg(test)]
             mod [< test_ $function_name >] {
-                use super::{rocket, DatabaseState};
+                use super::{rocket, Config};
                 use rocket::{http::Status, local::blocking::Client, serde::json, State};
                 use shelby_backend::{DefaultGenerator, Record};
 
@@ -76,8 +130,8 @@ macro_rules! create_routes {
                 fn test_get() {
                     let engine = rocket();
                     let example = {
-                        let database: &DatabaseState = State::get(&engine).expect("valid database");
-                        TargetEntity::create_default(&database.lock().expect("database mutex"))
+                        let state: &State<Config> = State::get(&engine).expect("valid database");
+                        TargetEntity::create_default(&state.database())
                     };
 
                     let client = super::tests::login(engine);
@@ -98,8 +152,8 @@ macro_rules! create_routes {
                 fn test_get_by_id() {
                     let engine = rocket();
                     let example = {
-                        let database: &DatabaseState = State::get(&engine).expect("valid database");
-                        TargetEntity::create_default(&database.lock().expect("database mutex"))
+                        let state: &State<Config> = State::get(&engine).expect("valid database");
+                        TargetEntity::create_default(&state.database())
                     };
 
                     let client = super::tests::login(engine);
@@ -133,8 +187,8 @@ macro_rules! create_routes {
                 #[test]
                 fn test_get_unauthorized() {
                     let engine = rocket();
-                    let database: &DatabaseState = State::get(&engine).expect("valid database");
-                    let example = TargetEntity::create_default(&database.lock().expect("database mutex"));
+                    let state: &State<Config> = State::get(&engine).expect("valid database");
+                    let example = TargetEntity::create_default(&state.database());
 
                     let client = Client::tracked(engine).expect("valid client");
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
@@ -173,47 +227,83 @@ macro_rules! write_routes {
     }};
 }
 
-#[get("/")]
-fn index() -> &'static str {
-    "shelby 0.1"
-}
-
 create_routes!("/persons" ("/persons/<id>") => Person (person));
 create_routes!("/groups" ("/groups/<id>") => Group (group));
 create_routes!("/documents" ("/documents/<id>") => Document (document));
 
+#[get("/", rank = 1)]
+async fn index_protected(
+    _user: AuthenticatedUser<auth::Forward>,
+    config: &State<Config>,
+) -> Option<NamedFile> {
+    config.private_assets("dashboard.html").await.ok()
+}
+
+#[get("/", rank = 2)]
+async fn index_public(config: &State<Config>) -> Option<NamedFile> {
+    config.private_assets("login.html").await.ok()
+}
+
+#[get("/<file..>", rank = 10)]
+async fn serve_files(file: PathBuf, config: &State<Config>) -> Option<NamedFile> {
+    config.public_assets(file).await.ok()
+}
+
 #[launch]
 fn rocket() -> _ {
     let database = Database::in_memory().expect("valid database");
-    let config = rocket::Config {
-        secret_key: rocket::config::SecretKey::generate().expect("safe RNG available"),
-        ..Default::default()
+
+    // Add a first default user
+    {
+        let mut admin = shelby_backend::user::User::create_default(&database);
+        admin.username = String::from("admin");
+        admin.password_hash = shelby_backend::user::PasswordHash::new("admin", "test1234");
+        admin.insert(&database).expect("unable to add Admin user");
+    }
+
+    let config = match Config::from_env(database) {
+        Some(value) => value,
+        None => {
+            eprintln!(
+                "Env variable {} does not point to valid asset directory",
+                Config::ENV_VARIBLE_PATH
+            );
+            std::process::exit(1)
+        }
     };
 
-    let figment = rocket::Config::figment()
-        .merge(rocket::figment::providers::Serialized::defaults(config));
+    let figment = rocket::Config::figment().merge(
+        rocket::figment::providers::Serialized::defaults(rocket::Config {
+            secret_key: rocket::config::SecretKey::generate().expect("safe RNG available"),
+            ..Default::default()
+        }),
+    );
 
-    rocket::custom(figment).manage(Mutex::new(database)).mount(
+    rocket::custom(figment).manage(config).mount(
         "/",
-        write_routes!(person, group, document + (index, login, logout)),
+        write_routes!(
+            person,
+            group,
+            document + (index_protected, index_public, serve_files, login, logout)
+        ),
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{rocket, DatabaseState, auth};
+    use std::io::Read;
+
+    use super::{auth, rocket, Config};
     use rocket::{http::ContentType, local::blocking::Client, State};
     use shelby_backend::{DefaultGenerator, IndexableDatebaseEntry};
 
-    pub fn login<P: rocket::Phase>(engine: rocket::Rocket<P>) -> Client {
-        let credentials = auth::Credentials {
-            user: String::from("Chris"),
-            password: String::from("test1234"),
-        };
-
+    fn add_user<P: rocket::Phase>(
+        engine: rocket::Rocket<P>,
+        credentials: &auth::Credentials,
+    ) -> Client {
         let _ = {
-            let database_container: &DatabaseState = State::get(&engine).expect("valid database");
-            let database = database_container.lock().expect("database mutex");
+            let database_container: &State<Config> = State::get(&engine).expect("valid database");
+            let database = database_container.database();
 
             let mut user = shelby_backend::user::User::create_default(&database);
             user.username = String::from(&credentials.user);
@@ -222,11 +312,43 @@ mod tests {
             user.insert(&database).expect("user insertion sucessfull")
         };
 
-        let client = Client::tracked(engine).expect("valid client");
+        Client::tracked(engine).expect("valid client")
+    }
+
+    /// Compare a recieved response with a local file.
+    fn compare_response(client: &Client, url: &str, asset_relative_path: &str) {
+        let ASSET_FOLDER = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+        let recieved_response = client
+            .get(url)
+            .dispatch()
+            .into_string()
+            .expect("valid string");
+
+        let mut expected_output = String::new();
+        std::fs::File::open(ASSET_FOLDER.join(asset_relative_path))
+            .expect("valid file")
+            .read_to_string(&mut expected_output)
+            .expect("read failed");
+
+        assert_eq!(recieved_response, expected_output);
+    }
+
+    pub fn login<P: rocket::Phase>(engine: rocket::Rocket<P>) -> Client {
+        let credentials = auth::Credentials {
+            user: String::from("Chris"),
+            password: String::from("test1234"),
+        };
+
+        let client = add_user(engine, &credentials);
 
         // Log in
         {
-            let creation_response = client.post("/users/login").header(ContentType::Form).body("user=Chris&password=test1234").dispatch();
+            let creation_response = client
+                .post("/users/login")
+                .header(ContentType::Form)
+                .body("user=Chris&password=test1234")
+                .dispatch();
             assert_eq!(creation_response.status(), rocket::http::Status::SeeOther);
         }
 
@@ -239,10 +361,59 @@ mod tests {
     }
 
     #[test]
+    fn test_login_fail() {
+        let credentials = auth::Credentials {
+            user: String::from("Chris"),
+            password: String::from("test1234"),
+        };
+        let client = add_user(rocket(), &credentials);
+
+        let creation_response = client
+            .post("/users/login")
+            .header(ContentType::Form)
+            .body("user=Chris&password=WRONG_PASSWORD")
+            .dispatch();
+
+        // Check the wrong password is detected ...
+        assert_eq!(
+            creation_response.status(),
+            rocket::http::Status::Unauthorized
+        );
+
+        // ... and the user is not logged in.
+        let response = client.get("/persons").dispatch();
+        assert_eq!(response.status(), rocket::http::Status::Unauthorized);
+    }
+
+    #[test]
     fn test_logout_without_login() {
         let client = Client::tracked(rocket()).expect("valid client");
         let login_response = client.get("/users/logout").dispatch();
         // We may thing about changing that
         assert_eq!(login_response.status(), rocket::http::Status::SeeOther);
+    }
+
+    #[test]
+    fn test_login_page() {
+        let credentials = auth::Credentials {
+            user: String::from("Chris"),
+            password: String::from("test1234"),
+        };
+
+        let client = add_user(rocket(), &credentials);
+
+        // Check we receive first the login page
+        compare_response(&client, "/", "assets/login.html");
+
+        // Simulate login
+        let creation_response = client
+            .post("/users/login")
+            .header(ContentType::Form)
+            .body("user=Chris&password=test1234")
+            .dispatch();
+        assert_eq!(creation_response.status(), rocket::http::Status::SeeOther);
+
+        // Now we get the dashboard!
+        compare_response(&client, "/", "assets/dashboard.html");
     }
 }

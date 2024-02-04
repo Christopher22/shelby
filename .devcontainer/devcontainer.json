@@ -1,4 +1,14 @@
 {
 	"name": "Rust",
-	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bullseye"
+	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bullseye",
+	"containerEnv": {
+		"SHELBY_ASSETS": "/workspaces/shelby/assets"
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"editor.formatOnSave": true
+			}
+		}
+	}
 }
