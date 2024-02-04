@@ -1,12 +1,12 @@
 use rocket::{form::{Form, Strict},
-    http::{Cookie, CookieJar}, outcome::IntoOutcome, request::Outcome, response::Redirect, serde::json
+    http::{Cookie, CookieJar, Status}, outcome::{IntoOutcome, Outcome}, response::Redirect, serde::json, State
 };
 use shelby_backend::{
     user::User,
     PrimaryKey, Record,
 };
 
-use super::{DatabaseState, Error};
+use super::{Config, Error};
 
 /// Credentials of a user send for login,
 #[derive(Debug, Clone, FromForm)]
@@ -15,12 +15,40 @@ pub struct Credentials {
     pub password: String,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct AuthenticatedUser {
-    user: PrimaryKey<User>,
+/// The strategy how to proced in cases of missing authorization.
+pub trait Strategy: Default {
+    /// Convert to object to an appropiated outcome
+    fn to_outcome(value: Option<AuthenticatedUser<Self>>) -> Outcome<AuthenticatedUser<Self>, (Status, ()), Status>;
 }
 
-impl AuthenticatedUser {
+/// Forward to the next possible route or return 'Unauthorized'.
+#[derive(Default)]
+pub struct Forward;
+
+impl Strategy for Forward {
+    fn to_outcome(value: Option<AuthenticatedUser<Self>>) -> Outcome<AuthenticatedUser<Self>, (Status, ()), Status> {
+        value.or_forward(Status::Unauthorized)
+    }
+}
+
+/// Fail fast and return 'Unauthorized'.
+#[derive(Default)]
+pub struct Fail;
+
+impl Strategy for Fail {
+    fn to_outcome(value: Option<AuthenticatedUser<Self>>) -> Outcome<AuthenticatedUser<Self>, (Status, ()), Status> {
+        value.or_error((Status::Unauthorized, ()))
+    }
+}
+
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct AuthenticatedUser<T = Fail> {
+    user: PrimaryKey<User>,
+    strategy: T
+}
+
+impl<T: Strategy> AuthenticatedUser<T> {
     /// The name of the cookie used to store the ID
     pub const AUTH_COOKIE_NAME: &'static str = "shelby_auth";
 
@@ -28,7 +56,7 @@ impl AuthenticatedUser {
     pub fn login(cookies: &CookieJar, user: &Record<User>) {
         cookies.add_private(
             Cookie::build((
-                AuthenticatedUser::AUTH_COOKIE_NAME,
+                Self::AUTH_COOKIE_NAME,
                 rocket::serde::json::to_string(&user.identifier).expect("valid serialized element"),
             ))
             .path("/")
@@ -38,33 +66,33 @@ impl AuthenticatedUser {
 
     /// Logout any registered user.
     pub fn logout(cookies: &CookieJar) {
-        cookies.remove(AuthenticatedUser::AUTH_COOKIE_NAME);
+        cookies.remove(Self::AUTH_COOKIE_NAME);
     }
 }
 
 #[rocket::async_trait]
-impl<'r> rocket::request::FromRequest<'r> for AuthenticatedUser {
+impl<'r, T: Strategy> rocket::request::FromRequest<'r> for AuthenticatedUser<T> {
     type Error = ();
 
-    async fn from_request(request: &'r rocket::Request<'_>) -> Outcome<Self, Self::Error> {
-        request
+    async fn from_request(request: &'r rocket::Request<'_>) -> Outcome<Self, (Status, Self::Error), Status> {
+        T::to_outcome(request
             .cookies()
-            .get_private(AuthenticatedUser::AUTH_COOKIE_NAME)
+            .get_private(Self::AUTH_COOKIE_NAME)
             .and_then(|cookie| json::from_str(cookie.value()).ok())
-            .map(|primary_key| AuthenticatedUser { user: primary_key })
-            .or_error((rocket::http::Status::Unauthorized, ()))
+            .map(|primary_key| AuthenticatedUser { user: primary_key, strategy: T::default() })
+        )
     }
 }
 
 #[post("/users/login", data = "<credentials>")]
 pub fn login(
-    state: &DatabaseState,
+    state: &State<Config>,
     credentials: Form<Strict<Credentials>>,
     cookies: &CookieJar,
 ) -> Result<Redirect, Error> {
-    match User::select_by_name(&state.lock().expect("database mutex"), &credentials.user) {
+    match User::select_by_name(&state.database(), &credentials.user) {
         Ok(Some(user)) => {
-            AuthenticatedUser::login(cookies, &user);
+            AuthenticatedUser::<Fail>::login(cookies, &user);
             Ok(Redirect::to(uri!("/")))
         }
         Ok(None) => Err(Error::NotFound),
@@ -74,6 +102,6 @@ pub fn login(
 
 #[get("/users/logout")]
 pub fn logout(cookies: &CookieJar) -> Redirect {
-    AuthenticatedUser::logout(cookies);
+    AuthenticatedUser::<Forward>::logout(cookies);
     Redirect::to(uri!("/"))
 }
