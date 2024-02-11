@@ -66,6 +66,7 @@ macro_rules! create_routes {
                 use super::{rocket, Config};
                 use rocket::{http::Status, local::blocking::Client, serde::json, State};
                 use shelby_backend::{DefaultGenerator, Record};
+                use crate::frontend::RenderableDatabaseEntry;
 
                 type TargetEntity = super::$database_entry;
                 const ACCESS_POINT: &'static str = $path;
@@ -79,6 +80,10 @@ macro_rules! create_routes {
                         response.content_type(),
                         Some(rocket::http::ContentType::HTML)
                     );
+
+                    // Ensure the reponse contains the title
+                    let response = response.into_string().expect("valid str");
+                    assert!(response.find(TargetEntity::TITLE).is_some());
                 }
 
                 #[test]
@@ -114,7 +119,9 @@ macro_rules! create_routes {
                         Some(rocket::http::ContentType::HTML)
                     );
 
-                    // TODO: Some logic to check HTML
+                    // Ensure the reponse contains the title
+                    let response = response.into_string().expect("valid str");
+                    assert!(response.find(TargetEntity::TITLE).is_some());
                 }
 
                 #[test]

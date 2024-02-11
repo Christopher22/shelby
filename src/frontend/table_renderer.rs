@@ -18,6 +18,7 @@ where
 
     fn generate_context(&self) -> impl Serialize {
         context! {
+            title: &T::TITLE,
             headers: &T::COLUMNS,
             rows: &self.0
         }
@@ -25,8 +26,13 @@ where
 }
 
 pub trait RenderableDatabaseEntry<const N: usize>: IndexableDatebaseEntry {
+    /// The title of the entry
+    const TITLE: &'static str;
+
+    /// The columns of the table.
     const COLUMNS: [&'static str; N];
 
+    /// Translate a record into a row of strings.
     fn generate_table_row(entry: Record<Self>) -> [String; N];
 
     /// Create a list for rendering all elements.
@@ -44,6 +50,7 @@ pub trait RenderableDatabaseEntry<const N: usize>: IndexableDatebaseEntry {
 }
 
 impl RenderableDatabaseEntry<3> for shelby_backend::person::Person {
+    const TITLE: &'static str = "Contacts";
     const COLUMNS: [&'static str; 3] = ["Name", "Address", "E-Mail"];
 
     fn generate_table_row(entry: Record<Self>) -> [String; 3] {
@@ -53,6 +60,7 @@ impl RenderableDatabaseEntry<3> for shelby_backend::person::Person {
 }
 
 impl RenderableDatabaseEntry<2> for shelby_backend::person::Group {
+    const TITLE: &'static str = "Groups";
     const COLUMNS: [&'static str; 2] = ["Group", "Description"];
 
     fn generate_table_row(group: Record<Self>) -> [String; 2] {
@@ -61,6 +69,7 @@ impl RenderableDatabaseEntry<2> for shelby_backend::person::Group {
 }
 
 impl RenderableDatabaseEntry<4> for shelby_backend::document::Document {
+    const TITLE: &'static str = "Documents";
     const COLUMNS: [&'static str; 4] = ["Name", "From", "To", "Description"];
 
     fn generate_table_row(document: Record<Self>) -> [String; 4] {
