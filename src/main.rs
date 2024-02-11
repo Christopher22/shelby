@@ -248,6 +248,20 @@ async fn serve_files(file: PathBuf, config: &State<Config>) -> Option<NamedFile>
     config.send_asset(file).await.ok()
 }
 
+#[catch(default)]
+async fn error_handler(
+    status: rocket::http::Status,
+    req: &rocket::Request<'_>,
+) -> Result<Template, Json<()>> {
+    match req.content_type() {
+        Some(value) if value.0.is_json() => Err(Json(())),
+        _ => Ok(Template::render(
+            "error",
+            context! { error: status.reason_lossy() },
+        )),
+    }
+}
+
 #[launch]
 fn rocket() -> _ {
     let database = Database::in_memory().expect("valid database");
@@ -281,6 +295,7 @@ fn rocket() -> _ {
     rocket::custom(figment)
         .manage(config)
         .attach(Template::fairing())
+        .register("/", catchers![error_handler])
         .mount(
             "/",
             write_routes!(
@@ -412,5 +427,35 @@ mod tests {
 
         // Now we get the dashboard!
         compare_response(&client, "/", "dashboard");
+    }
+
+    #[test]
+    fn test_error_catching_html() {
+        let client = Client::tracked(rocket()).expect("valid client");
+        let response = client.get("/invalid_page").dispatch();
+
+        assert_eq!(response.status(), rocket::http::Status::NotFound);
+
+        // Ensure we got a custom error page mentioning "Shelby"
+        let response = response.into_string().expect("valid string");
+        assert!(response.find("Shelby").is_some())
+    }
+
+    #[test]
+    fn test_error_catching_json() {
+        let client = Client::tracked(rocket()).expect("valid client");
+        let response = client
+            .get("/invalid_page")
+            .header(rocket::http::ContentType::JSON)
+            .dispatch();
+
+        assert_eq!(response.status(), rocket::http::Status::NotFound);
+        assert_eq!(
+            response.content_type(),
+            Some(rocket::http::ContentType::JSON)
+        );
+
+        let response = response.into_string().expect("valid str");
+        let _: () = rocket::serde::json::from_str(&response).expect("valid json");
     }
 }
