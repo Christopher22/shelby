@@ -6,6 +6,7 @@ extern crate rocket;
 mod auth;
 mod config;
 mod error;
+mod frontend;
 
 use auth::{login, logout, AuthenticatedUser};
 use rocket::{fs::NamedFile, response::status, serde::json::Json, State};
@@ -18,6 +19,7 @@ use shelby_backend::{
 use std::path::PathBuf;
 
 pub use self::{config::Config, error::Error};
+pub use frontend::{Renderable, RenderableDatabaseEntry};
 
 macro_rules! create_routes {
     ($path: literal ($path_id: literal) => $database_entry: ident ($function_name: ident)) => {
@@ -36,10 +38,16 @@ macro_rules! create_routes {
             }
 
             #[get($path, rank = 3)]
-            fn [< get_all_ $function_name s >](_user: AuthenticatedUser, state: &State<Config>) -> Result<Json<Vec<Record<$database_entry>>>, Error> {
-                Ok(Json($database_entry::select_all(
-                    &state.database()
-                )?))
+            fn [< get_all_ $function_name s >](
+                _user: AuthenticatedUser,
+                state: &State<Config>,
+                content_type: Option<&rocket::http::ContentType>,
+            ) -> Result<Result<Template, Json<Vec<Record<$database_entry>>>>, Error> {
+                let database = &state.database();
+                Ok(match content_type {
+                    Some(value) if value.0.is_json() => Err(Json($database_entry::select_all(&database)?)),
+                    _ => Ok($database_entry::prepare_rendering_all(&database)?.render()),
+                })
             }
 
             #[get($path_id, rank = 3)]
@@ -67,13 +75,28 @@ macro_rules! create_routes {
                     let client = super::tests::login(rocket());
                     let response = client.get(ACCESS_POINT).dispatch();
                     assert_eq!(response.status(), Status::Ok);
+                    assert_eq!(
+                        response.content_type(),
+                        Some(rocket::http::ContentType::HTML)
+                    );
+                }
+
+                #[test]
+                fn test_get_empty_json() {
+                    let client = super::tests::login(rocket());
+                    let response = client.get(ACCESS_POINT).header(rocket::http::ContentType::JSON).dispatch();
+                    assert_eq!(response.status(), Status::Ok);
+                    assert_eq!(
+                        response.content_type(),
+                        Some(rocket::http::ContentType::JSON)
+                    );
 
                     let response_json: Vec<Record<TargetEntity>> = response.into_json().expect("valid json");
                     assert_eq!(response_json.len(), 0);
                 }
 
                 #[test]
-                fn test_get() {
+                fn test_get_all() {
                     let engine = rocket();
                     let example = {
                         let state: &State<Config> = State::get(&engine).expect("valid database");
@@ -86,6 +109,32 @@ macro_rules! create_routes {
 
                     let response = client.get(ACCESS_POINT).dispatch();
                     assert_eq!(response.status(), Status::Ok);
+                    assert_eq!(
+                        response.content_type(),
+                        Some(rocket::http::ContentType::HTML)
+                    );
+
+                    // TODO: Some logic to check HTML
+                }
+
+                #[test]
+                fn test_get_all_json() {
+                    let engine = rocket();
+                    let example = {
+                        let state: &State<Config> = State::get(&engine).expect("valid database");
+                        TargetEntity::create_default(&state.database())
+                    };
+
+                    let client = super::tests::login(engine);
+                    let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
+                    assert_eq!(creation_response.status(), Status::Created);
+
+                    let response = client.get(ACCESS_POINT).header(rocket::http::ContentType::JSON).dispatch();
+                    assert_eq!(response.status(), Status::Ok);
+                    assert_eq!(
+                        response.content_type(),
+                        Some(rocket::http::ContentType::JSON)
+                    );
 
                     // Why does this fail?
                     // let response_json: Vec<Record<TargetEntity>> = response.into_json().expect("valid json");
@@ -260,7 +309,7 @@ mod tests {
         Client::tracked(engine).expect("valid client")
     }
 
-    /// Compare a recieved response with a local file.
+    /// Compare a recieved response with a template.
     fn compare_response(client: &Client, url: &'static str, template: &'static str) {
         let recieved_response = client
             .get(url)
