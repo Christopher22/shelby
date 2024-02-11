@@ -4,74 +4,20 @@
 extern crate rocket;
 
 mod auth;
+mod config;
 mod error;
 
 use auth::{login, logout, AuthenticatedUser};
 use rocket::{fs::NamedFile, response::status, serde::json::Json, State};
+use rocket_dyn_templates::{context, Template};
 use shelby_backend::{
     document::Document,
     person::{Group, Person},
     Database, DefaultGenerator, IndexableDatebaseEntry, Record,
 };
-use std::{
-    future::Future,
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
+use std::path::PathBuf;
 
-pub use self::error::Error;
-
-struct Config {
-    database: Mutex<Database>,
-    public_assets: PathBuf,
-}
-
-impl Config {
-    pub const ENV_VARIBLE_PATH: &'static str = "SHELBY_ASSETS";
-
-    pub fn from_env(database: Database) -> Option<Self> {
-        let public_assets = std::env::var(Self::ENV_VARIBLE_PATH)
-            .ok()
-            .and_then(|value| {
-                let path = PathBuf::from(value);
-                match path.join("dashboard.html").is_file() && path.join("public").is_dir() {
-                    true => Some(path.join("public")),
-                    false => None,
-                }
-            })?;
-
-        Some(Config {
-            database: Mutex::new(database),
-            public_assets,
-        })
-    }
-
-    /// Get a (safe) NamedFile for a public asset.
-    fn private_assets(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> impl Future<Output = Result<NamedFile, std::io::Error>> {
-        NamedFile::open(
-            self.public_assets
-                .parent()
-                .expect("valid parent")
-                .join(path),
-        )
-    }
-
-    /// Get a (safe) NamedFile for a public asset.
-    fn public_assets(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> impl Future<Output = Result<NamedFile, std::io::Error>> {
-        NamedFile::open(self.public_assets.join(path))
-    }
-
-    /// Get a handle to the database.
-    fn database(&self) -> std::sync::MutexGuard<'_, Database> {
-        self.database.lock().expect("database mutex")
-    }
-}
+pub use self::{config::Config, error::Error};
 
 macro_rules! create_routes {
     ($path: literal ($path_id: literal) => $database_entry: ident ($function_name: ident)) => {
@@ -232,21 +178,18 @@ create_routes!("/groups" ("/groups/<id>") => Group (group));
 create_routes!("/documents" ("/documents/<id>") => Document (document));
 
 #[get("/", rank = 1)]
-async fn index_protected(
-    _user: AuthenticatedUser<auth::Forward>,
-    config: &State<Config>,
-) -> Option<NamedFile> {
-    config.private_assets("dashboard.html").await.ok()
+async fn index_protected(_user: AuthenticatedUser<auth::Forward>) -> Template {
+    Template::render("dashboard", context! {})
 }
 
 #[get("/", rank = 2)]
-async fn index_public(config: &State<Config>) -> Option<NamedFile> {
-    config.private_assets("login.html").await.ok()
+async fn index_public() -> Template {
+    Template::render("login", context! {})
 }
 
 #[get("/<file..>", rank = 10)]
 async fn serve_files(file: PathBuf, config: &State<Config>) -> Option<NamedFile> {
-    config.public_assets(file).await.ok()
+    config.send_asset(file).await.ok()
 }
 
 #[launch]
@@ -279,22 +222,24 @@ fn rocket() -> _ {
         }),
     );
 
-    rocket::custom(figment).manage(config).mount(
-        "/",
-        write_routes!(
-            person,
-            group,
-            document + (index_protected, index_public, serve_files, login, logout)
-        ),
-    )
+    rocket::custom(figment)
+        .manage(config)
+        .attach(Template::fairing())
+        .mount(
+            "/",
+            write_routes!(
+                person,
+                group,
+                document + (index_protected, index_public, serve_files, login, logout)
+            ),
+        )
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io::Read;
-
     use super::{auth, rocket, Config};
     use rocket::{http::ContentType, local::blocking::Client, State};
+    use rocket_dyn_templates::context;
     use shelby_backend::{DefaultGenerator, IndexableDatebaseEntry};
 
     fn add_user<P: rocket::Phase>(
@@ -316,20 +261,16 @@ mod tests {
     }
 
     /// Compare a recieved response with a local file.
-    fn compare_response(client: &Client, url: &str, asset_relative_path: &str) {
-        let ASSET_FOLDER = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
+    fn compare_response(client: &Client, url: &'static str, template: &'static str) {
         let recieved_response = client
             .get(url)
             .dispatch()
             .into_string()
             .expect("valid string");
 
-        let mut expected_output = String::new();
-        std::fs::File::open(ASSET_FOLDER.join(asset_relative_path))
-            .expect("valid file")
-            .read_to_string(&mut expected_output)
-            .expect("read failed");
+        let expected_output =
+            rocket_dyn_templates::Template::show(client.rocket(), template, context! {})
+                .expect("valid output");
 
         assert_eq!(recieved_response, expected_output);
     }
@@ -403,7 +344,7 @@ mod tests {
         let client = add_user(rocket(), &credentials);
 
         // Check we receive first the login page
-        compare_response(&client, "/", "assets/login.html");
+        compare_response(&client, "/", "login");
 
         // Simulate login
         let creation_response = client
@@ -414,6 +355,6 @@ mod tests {
         assert_eq!(creation_response.status(), rocket::http::Status::SeeOther);
 
         // Now we get the dashboard!
-        compare_response(&client, "/", "assets/dashboard.html");
+        compare_response(&client, "/", "dashboard");
     }
 }
