@@ -19,10 +19,10 @@ use shelby_backend::{
 use std::path::PathBuf;
 
 pub use self::{config::Config, error::Error};
-pub use frontend::{Renderable, RenderableDatabaseEntry};
+pub use frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry};
 
 macro_rules! create_routes {
-    ($path: literal ($path_id: literal) => $database_entry: ident ($function_name: ident)) => {
+    ($path: literal ($path_id: literal, $path_add: literal) => $database_entry: ident ($function_name: ident)) => {
         paste::paste! {
             #[post($path, format = "json", data = "<database_entry>", rank = 3)]
             fn [< add_ $function_name >](
@@ -59,6 +59,11 @@ macro_rules! create_routes {
                     Some(value) => Ok(Json(value)),
                     None => Err(Error::NotFound)
                 }
+            }
+
+            #[get($path_add, rank = 2)]
+            fn [< add_ $function_name _frontend>](_user: AuthenticatedUser) -> Template {
+                $database_entry::prepare_rendering($path).render()
             }
 
             #[cfg(test)]
@@ -224,14 +229,14 @@ macro_rules! create_routes {
 macro_rules! write_routes {
     ($($function_name: ident),* + ($($additional: ident),*)) => { paste::paste! {
         routes![$($additional),*, $(
-            [< add_ $function_name >], [< get_all_ $function_name s >], [< get_ $function_name _by_id>]
+            [< add_ $function_name >], [< get_all_ $function_name s >], [< get_ $function_name _by_id>], [< add_ $function_name _frontend>]
         ),*]
     }};
 }
 
-create_routes!("/persons" ("/persons/<id>") => Person (person));
-create_routes!("/groups" ("/groups/<id>") => Group (group));
-create_routes!("/documents" ("/documents/<id>") => Document (document));
+create_routes!("/persons" ("/persons/<id>", "/persons/new") => Person (person));
+create_routes!("/groups" ("/groups/<id>", "/groups/new") => Group (group));
+create_routes!("/documents" ("/documents/<id>", "/documents/new") => Document (document));
 
 #[get("/", rank = 1)]
 async fn index_protected(_user: AuthenticatedUser<auth::Forward>) -> Template {

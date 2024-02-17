@@ -1,0 +1,97 @@
+{% extends "base" %}
+{% block main %}
+<h4 class="mb-3">{{ name }}</h4>
+<form id="shelby_form" class="needs-validation" novalidate="">
+    {% for field in fields %}
+    <div class="col-12">
+        <label for="{{field.id}}" class="form-label">{{field.label}}</label>
+        <div class="input-group has-validation">
+        <!-- <input id="{{field.id}}"> -->
+        <input id="{{field.id}}" name="{{field.id}}" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
+        <div class="invalid-feedback">
+            Your username is required.
+        </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <hr class="my-4">
+
+    <button class="w-100 btn btn-primary btn-lg" type="submit">Update</button>
+</form>
+{% endblock main %}
+
+{% block body_end %}
+<div class="modal" id="infoModal" tabindex="-1" role="dialog" aria-labelledby="infoModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="infoModalLabel" />
+        <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="infoModalBody">
+        <!-- Error message will be displayed here -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showInfoModal(title, message) {
+    var modalTitle = document.getElementById('infoModalLabel');
+    modalTitle.textContent = title;
+
+    var modalBody = document.getElementById('infoModalBody');
+    modalBody.textContent = message;
+
+    new bootstrap.Modal("#infoModal").show();
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    document.getElementById('shelby_form').addEventListener('submit', function(e) {
+        e.preventDefault(); // prevent default form submission
+        var formData = new FormData(this);
+        var dataToSend = {};
+
+        // Serialize form data
+        for (var pair of formData) {
+            var value = parseInt(pair[1]);
+            dataToSend[pair[0]] = isNaN(value) ? pair[1] : value;
+        }
+
+        // Deactivate form inputs
+        var inputs = this.querySelectorAll('input, select, textarea, button');
+        inputs.forEach(function(input) {
+            input.disabled = true;
+        });
+
+        // Send data via Ajax
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', "{{post_url | safe}}", true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 201) {
+                    showInfoModal("Success", "Element successfully created")
+                } else {
+                    showInfoModal("Error", xhr.statusText)
+                }
+
+                // Re-enable form inputs
+                inputs.forEach(function(input) {
+                    input.disabled = false;
+                });
+            }
+        };
+
+        xhr.send(JSON.stringify(dataToSend));
+    });
+});
+</script>
+
+{% endblock body_end %}

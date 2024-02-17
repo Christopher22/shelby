@@ -1,8 +1,10 @@
 use rocket::serde::Serialize;
 use rocket_dyn_templates::Template;
 
+mod form_renderer;
 mod table_renderer;
 
+pub use self::form_renderer::InsertableDatabaseEntry;
 pub use self::table_renderer::RenderableDatabaseEntry;
 
 pub trait Renderable: Sized {
