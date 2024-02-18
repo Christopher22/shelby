@@ -10,11 +10,11 @@ use crate::Date;
 
 crate::database::make_struct!(
     User (Table with derived Default: "users") depends on Person => {
-        username: String => "STRING NOT NULL",
-        password_hash: PasswordHash => "BLOB NOT NULL",
-        active: bool => "BOOL NOT NULL",
-        creation_date: Date => "DATETIME NOT NULL",
-        related_to: Option<PrimaryKey<Person>> => "INTEGER"
+        username: String,
+        password_hash: PasswordHash,
+        active: bool,
+        creation_date: Date,
+        related_to: Option<PrimaryKey<Person>>
     } ("FOREIGN KEY(related_to) REFERENCES persons(id)")
 );
 
@@ -78,6 +78,11 @@ impl rusqlite::types::FromSql for PasswordHash {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         <[u8; Self::CREDENTIAL_LEN]>::column_result(value).map(PasswordHash)
     }
+}
+
+impl crate::database::DatabaseType for PasswordHash {
+    const RAW_COLUMN_VALUE: &'static str = "BLOB";
+    const COLUMN_VALUE: &'static str = "BLOB NOT NULL";
 }
 
 impl User {

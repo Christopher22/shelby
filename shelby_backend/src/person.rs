@@ -3,17 +3,17 @@ use crate::Date;
 
 crate::database::make_struct!(
     Person (Table with derived Default: "persons") depends on () => {
-        name: String => "STRING NOT NULL",
-        address: String => "STRING NOT NULL",
-        email: Option<String> => "STRING",
-        birthday: Option<Date> => "DATETIME",
-        comment: Option<String> => "STRING"
+        name: String,
+        address: String,
+        email: Option<String>,
+        birthday: Option<Date>,
+        comment: Option<String>
     }
 );
 
 crate::database::make_struct!(
     Group (Table with derived Default: "groups") depends on () => {
-        description: String => "STRING NOT NULL"
+        description: String
     }
 );
 

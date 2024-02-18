@@ -123,3 +123,37 @@ impl<T: DatabaseEntry + Default> DefaultGenerator for T {
         Default::default()
     }
 }
+
+/// The information how a value is encoded in a table.
+pub trait DatabaseType: rusqlite::types::FromSql + rusqlite::types::ToSql {
+    /// The "pure" column value
+    const RAW_COLUMN_VALUE: &'static str;
+
+    /// The column value which should normaly be the RAW_COLUMN_VALUE + ' NOT NULL'.
+    const COLUMN_VALUE: &'static str;
+}
+
+macro_rules! create_database_type {
+    ($name: ty => $value: expr) => {
+        impl crate::database::DatabaseType for $name {
+            const RAW_COLUMN_VALUE: &'static str = $value;
+            const COLUMN_VALUE: &'static str = const_format::concatcp!($value, " NOT NULL");
+        }
+    };
+}
+
+create_database_type!(bool => "BOOL");
+create_database_type!(u32 => "INTEGER");
+create_database_type!(String => "TEXT");
+create_database_type!(crate::Date => "DATETIME");
+create_database_type!(Vec<u8> => "BLOB");
+
+impl<T: crate::database::IndexableDatebaseEntry> DatabaseType for crate::database::PrimaryKey<T> {
+    const RAW_COLUMN_VALUE: &'static str = "INTEGER";
+    const COLUMN_VALUE: &'static str = "INTEGER NOT NULL";
+}
+
+impl<T: DatabaseType> DatabaseType for Option<T> {
+    const RAW_COLUMN_VALUE: &'static str = T::RAW_COLUMN_VALUE;
+    const COLUMN_VALUE: &'static str = T::RAW_COLUMN_VALUE;
+}

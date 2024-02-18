@@ -10,4 +10,6 @@ pub(crate) use self::macros::{make_struct, question_mark};
 pub use self::primary_key::PrimaryKey;
 pub use self::record::Record;
 pub use self::sqlite::Database;
-pub use self::traits::{DatabaseEntry, DefaultGenerator, Dependency, IndexableDatebaseEntry};
+pub use self::traits::{
+    DatabaseEntry, DatabaseType, DefaultGenerator, Dependency, IndexableDatebaseEntry,
+};

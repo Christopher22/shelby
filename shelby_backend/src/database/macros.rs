@@ -6,7 +6,7 @@ macro_rules! question_mark {
 
 /// Create a indexable database entry.
 macro_rules! make_struct {
-    ($name: ident (Table $( with derived $derived: ident )?: $table_name: expr) depends on $dependencies: ty => { $( $(#[$os_attr: meta])? $element: ident: $ty: ty => $value: expr),* } $( ($additional_conditions: expr) )?) => {
+    ($name: ident (Table $( with derived $derived: ident )?: $table_name: expr) depends on $dependencies: ty => { $( $(#[$os_attr: meta])? $element: ident: $ty: ty),* } $( ($additional_conditions: expr) )?) => {
         paste::paste! {
             #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
             $(#[derive($derived)])?
@@ -18,11 +18,15 @@ macro_rules! make_struct {
                 type DependsOn = $dependencies;
 
                 const TABLE_NAME: &'static str = $table_name;
-                const STATEMENT_CREATE_TABLE: &'static str = std::concat!("CREATE TABLE IF NOT EXISTS ", $table_name, " (id INTEGER PRIMARY KEY", $( ", ", stringify!($element), " ", $value),* $(, ", ", $additional_conditions, " ")? , " )");
+                const STATEMENT_CREATE_TABLE: &'static str = const_format::concatcp!(
+                    "CREATE TABLE IF NOT EXISTS ", $table_name, " (id INTEGER PRIMARY KEY", $( ", ", stringify!($element), " ", <$ty as crate::database::DatabaseType>::COLUMN_VALUE ),* $(, ", ", $additional_conditions, " ")? , " )"
+                );
             }
 
             impl crate::database::IndexableDatebaseEntry for $name {
-                const STATEMENT_INSERT: &'static str = std::concat!("INSERT INTO ", $table_name, " (", concat_with::concat!(with ", ", $(stringify!($element)),*), ") VALUES (", concat_with::concat!(with ", ", $(crate::database::question_mark!($element)),*), ")");
+                const STATEMENT_INSERT: &'static str = std::concat!(
+                    "INSERT INTO ", $table_name, " (", concat_with::concat!(with ", ", $(stringify!($element)),*), ") VALUES (", concat_with::concat!(with ", ", $(crate::database::question_mark!($element)),*), ")"
+                );
                 const STATEMENT_SELECT_ALL: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name);
                 const STATEMENT_SELECT: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name, " WHERE id = ?");
 
@@ -117,16 +121,16 @@ mod test {
 
     crate::database::make_struct!(
         Test (Table with derived Default: "tests") depends on () => {
-            bool_value: bool => "BOOL NOT NULL",
-            string_value: String  => "STRING NOT NULL",
-            integer_value: u32 => "INTEGER NOT NULL"
+            bool_value: bool,
+            string_value: String,
+            integer_value: u32
         }
     );
 
     // We need to check values with single elements are properly serialized, too.
     crate::database::make_struct!(
         TestSingleElement (Table with derived Default: "tests_single") depends on () => {
-            string_value: String  => "STRING NOT NULL"
+            string_value: String
         }
     );
 

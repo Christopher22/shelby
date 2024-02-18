@@ -3,13 +3,13 @@ use crate::{person::Person, user::User, Date};
 
 crate::database::make_struct!(
     Document (Table: "documents") depends on (Person, User)  => {
-        document: Vec<u8> => "BLOB NOT NULL",
-        processed_by: PrimaryKey<User> => "INTEGER NOT NULL",
-        from_person: PrimaryKey<Person> => "INTEGER NOT NULL",
-        to_person: PrimaryKey<Person> => "INTEGER NOT NULL",
-        recieved: Date => "DATETIME NOT NULL",
-        processed: Date => "DATETIME NOT NULL",
-        description: Option<String> => "STRING"
+        document: Vec<u8> ,
+        processed_by: PrimaryKey<User>,
+        from_person: PrimaryKey<Person>,
+        to_person: PrimaryKey<Person>,
+        recieved: Date,
+        processed: Date,
+        description: Option<String>
     } ("FOREIGN KEY(processed_by) REFERENCES users(id), FOREIGN KEY(from_person) REFERENCES persons(id), FOREIGN KEY(to_person) REFERENCES persons(id)")
 );
 
