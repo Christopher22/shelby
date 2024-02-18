@@ -5,7 +5,7 @@ use std::{
 };
 
 use rocket::fs::NamedFile;
-use shelby_backend::Database;
+use shelby_backend::database::Database;
 
 pub struct Config {
     database: Mutex<Database>,

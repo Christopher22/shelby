@@ -2,10 +2,10 @@ use rocket::{http::Status, response::Responder};
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    DatabaseError(shelby_backend::Error),
+    DatabaseError(shelby_backend::database::Error),
     NotFound,
     ConstraintViolation,
-    WrongPassword
+    WrongPassword,
 }
 
 impl std::fmt::Display for Error {
@@ -19,8 +19,8 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl From<shelby_backend::Error> for Error {
-    fn from(value: shelby_backend::Error) -> Self {
+impl From<shelby_backend::database::Error> for Error {
+    fn from(value: shelby_backend::database::Error) -> Self {
         match value.is_constraint_violation() {
             true => Error::ConstraintViolation,
             false => Error::DatabaseError(value),
@@ -37,7 +37,7 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
             Error::DatabaseError(database_error) => {
                 eprintln!("{}", database_error);
                 Status::InternalServerError.respond_to(request)
-            },
+            }
             Error::NotFound => Status::NotFound.respond_to(request),
             Error::WrongPassword => Status::Unauthorized.respond_to(request),
         }

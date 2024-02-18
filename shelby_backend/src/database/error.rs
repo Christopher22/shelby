@@ -32,13 +32,16 @@ impl std::error::Error for Error {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{user::User, IndexableDatebaseEntry};
+    use crate::{
+        database::{Database, IndexableDatebaseEntry, PrimaryKey},
+        user::User,
+    };
 
     #[test]
     fn test_foreign_key_error() {
-        let database = crate::Database::in_memory().expect("valid database");
+        let database = Database::in_memory().expect("valid database");
         let document = User {
-            related_to: Some(crate::PrimaryKey::from(42)),
+            related_to: Some(PrimaryKey::from(42)),
             ..User::default()
         };
 

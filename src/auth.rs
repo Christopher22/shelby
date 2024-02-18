@@ -6,7 +6,10 @@ use rocket::{
     serde::json,
     State,
 };
-use shelby_backend::{user::User, PrimaryKey, Record};
+use shelby_backend::{
+    database::{PrimaryKey, Record},
+    user::User,
+};
 
 use super::{Config, Error};
 
@@ -72,7 +75,8 @@ impl<T: Strategy> AuthenticatedUser<T> {
             Cookie::build((
                 Self::AUTH_COOKIE_NAME,
                 rocket::serde::json::to_string(&user.identifier).expect("valid serialized element"),
-            )).same_site(rocket::http::SameSite::Lax)
+            ))
+            .same_site(rocket::http::SameSite::Lax),
         );
     }
 

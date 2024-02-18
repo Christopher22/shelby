@@ -1,6 +1,7 @@
-use crate::{DatabaseEntry, Date, Error, PrimaryKey};
+use crate::database::{Database, DatabaseEntry, Error, PrimaryKey};
+use crate::Date;
 
-crate::macros::make_struct!(
+crate::database::make_struct!(
     Person (Table with derived Default: "persons") depends on () => {
         name: String => "STRING NOT NULL",
         address: String => "STRING NOT NULL",
@@ -10,7 +11,7 @@ crate::macros::make_struct!(
     }
 );
 
-crate::macros::make_struct!(
+crate::database::make_struct!(
     Group (Table with derived Default: "groups") depends on () => {
         description: String => "STRING NOT NULL"
     }
@@ -40,7 +41,7 @@ impl DatabaseEntry for Membership {
 
 impl Membership {
     pub fn find_all_memberships(
-        database: &crate::Database,
+        database: &Database,
         person: PrimaryKey<Person>,
     ) -> Result<Vec<Membership>, Error> {
         let mut stmt = database
@@ -60,7 +61,7 @@ impl Membership {
     }
 
     pub fn find_all_members(
-        database: &crate::Database,
+        database: &Database,
         group: PrimaryKey<Group>,
     ) -> Result<Vec<Membership>, Error> {
         let mut stmt = database
@@ -79,7 +80,7 @@ impl Membership {
         Ok(iterator.filter_map(|value| value.ok()).collect())
     }
 
-    pub fn insert(&self, database: &crate::Database) -> Result<usize, Error> {
+    pub fn insert(&self, database: &Database) -> Result<usize, Error> {
         Ok(database.connection.execute(
             "INSERT INTO memberships (person_id, group_id, updated, comment) VALUES (?, ?, ?, ?)",
             (self.person.0, self.group.0, &self.updated, &self.comment),
@@ -89,7 +90,7 @@ impl Membership {
 
 #[cfg(test)]
 mod membership_tests {
-    use crate::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey};
+    use crate::database::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey};
 
     use super::{Group, Membership, Person};
 

@@ -1,6 +1,6 @@
 use rocket::serde::Serialize;
 use rocket_dyn_templates::context;
-use shelby_backend::{Database, IndexableDatebaseEntry, Record};
+use shelby_backend::database::{Database, IndexableDatebaseEntry, Record};
 
 use super::Renderable;
 
@@ -38,7 +38,7 @@ pub trait RenderableDatabaseEntry<const N: usize>: IndexableDatebaseEntry {
     /// Create a list for rendering all elements.
     fn prepare_rendering_all(
         database: &Database,
-    ) -> Result<TableRenderer<N, Self>, shelby_backend::Error> {
+    ) -> Result<TableRenderer<N, Self>, shelby_backend::database::Error> {
         Ok(TableRenderer(
             Self::select_all(database)?
                 .into_iter()

@@ -12,9 +12,10 @@ use auth::{login, logout, AuthenticatedUser};
 use rocket::{fs::NamedFile, response::status, serde::json::Json, State};
 use rocket_dyn_templates::{context, Template};
 use shelby_backend::{
+    database::{Database, DefaultGenerator, IndexableDatebaseEntry, Record},
     document::Document,
     person::{Group, Person},
-    Database, DefaultGenerator, IndexableDatebaseEntry, Record,
+    user::User,
 };
 use std::path::PathBuf;
 
@@ -70,7 +71,7 @@ macro_rules! create_routes {
             mod [< test_ $function_name >] {
                 use super::{rocket, Config};
                 use rocket::{http::Status, local::blocking::Client, serde::json, State};
-                use shelby_backend::{DefaultGenerator, Record};
+                use shelby_backend::database::{DefaultGenerator, Record};
                 use crate::frontend::RenderableDatabaseEntry;
 
                 type TargetEntity = super::$database_entry;
@@ -316,7 +317,7 @@ mod tests {
     use super::{auth, rocket, Config};
     use rocket::{http::ContentType, local::blocking::Client, State};
     use rocket_dyn_templates::context;
-    use shelby_backend::{DefaultGenerator, IndexableDatebaseEntry};
+    use shelby_backend::database::{DefaultGenerator, IndexableDatebaseEntry};
 
     fn add_user<P: rocket::Phase>(
         engine: rocket::Rocket<P>,

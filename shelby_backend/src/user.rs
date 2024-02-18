@@ -4,10 +4,11 @@ use rusqlite::types::ValueRef;
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
+use crate::database::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey, Record};
 use crate::person::Person;
-use crate::{Database, DatabaseEntry, Date, IndexableDatebaseEntry, PrimaryKey, Record};
+use crate::Date;
 
-crate::macros::make_struct!(
+crate::database::make_struct!(
     User (Table with derived Default: "users") depends on Person => {
         username: String => "STRING NOT NULL",
         password_hash: PasswordHash => "BLOB NOT NULL",
@@ -84,7 +85,7 @@ impl User {
     pub fn select_by_name(
         database: &Database,
         name: impl AsRef<str>,
-    ) -> Result<Option<Record<Self>>, crate::Error> {
+    ) -> Result<Option<Record<Self>>, crate::database::Error> {
         const SELECT_BY_NAME_QUERY: &'static str =
             const_format::formatcp!("SELECT * FROM {} WHERE username = ?", User::TABLE_NAME);
 
@@ -101,7 +102,7 @@ impl User {
 #[cfg(test)]
 mod tests {
     use super::{PasswordHash, User};
-    use crate::{Database, DatabaseEntry, DefaultGenerator, IndexableDatebaseEntry};
+    use crate::database::{Database, DatabaseEntry, DefaultGenerator, IndexableDatebaseEntry};
 
     #[test]
     fn test_hash() {

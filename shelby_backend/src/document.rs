@@ -1,8 +1,7 @@
-use crate::{
-    person::Person, user::User, Date, DefaultGenerator, IndexableDatebaseEntry, PrimaryKey,
-};
+use crate::database::{DefaultGenerator, IndexableDatebaseEntry, PrimaryKey};
+use crate::{person::Person, user::User, Date};
 
-crate::macros::make_struct!(
+crate::database::make_struct!(
     Document (Table: "documents") depends on (Person, User)  => {
         document: Vec<u8> => "BLOB NOT NULL",
         processed_by: PrimaryKey<User> => "INTEGER NOT NULL",
@@ -15,7 +14,7 @@ crate::macros::make_struct!(
 );
 
 impl DefaultGenerator for Document {
-    fn create_default(database: &crate::Database) -> Self {
+    fn create_default(database: &crate::database::Database) -> Self {
         let person = Person::default().insert(&database).expect("valid person");
         let user = User::default().insert(&database).expect("valid user");
 
@@ -34,11 +33,11 @@ impl DefaultGenerator for Document {
 #[cfg(test)]
 mod tests {
     use super::Document;
-    use crate::{DefaultGenerator, IndexableDatebaseEntry};
+    use crate::database::{DefaultGenerator, IndexableDatebaseEntry};
 
     #[test]
     fn test_availability_in_default_migrations() {
-        let database = crate::Database::in_memory().expect("valid database");
+        let database = crate::database::Database::in_memory().expect("valid database");
         Document::create_default(&database)
             .insert(&database)
             .expect("insert sucessfull");

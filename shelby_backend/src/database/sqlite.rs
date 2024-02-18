@@ -1,6 +1,7 @@
-use crate::{DatabaseEntry, Error};
 use rusqlite::Connection;
 use rusqlite_migration::{Migrations, M};
+
+use super::{DatabaseEntry, Error};
 
 pub struct Database {
     pub(crate) connection: Connection,
@@ -63,7 +64,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use crate::Database;
+    use crate::database::Database;
 
     #[test]
     fn test_migrations() {
