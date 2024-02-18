@@ -3,16 +3,19 @@
 <h4 class="mb-3">{{ name }}</h4>
 <form id="shelby_form" class="needs-validation" novalidate="">
     {% for field in fields %}
+    {% if field.input_type != "hidden" %}
     <div class="col-12">
-        <label for="{{field.id}}" class="form-label">{{field.label}}</label>
+        <label for="{{field.name}}" class="form-label">{{field.label}}</label>
         <div class="input-group has-validation">
-        <!-- <input id="{{field.id}}"> -->
-        <input id="{{field.id}}" name="{{field.id}}" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
+        <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" placeholder="{{field.placeholder}}" {% if field.required == true %} required {% endif %} {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
         <div class="invalid-feedback">
-            Your username is required.
+            Valus is required.
         </div>
         </div>
     </div>
+    {% else %}
+    <input type="hidden" id="{{field.name}}" name="{{field.name}}" value="{{field.value}}" />
+    {% endif %}
     {% endfor %}
 
     <hr class="my-4">
@@ -76,7 +79,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
             var value = pair[1];
             if (input_element.type === 'date') {
-              value = (new Date(value)).getTime() / 1000;
+              value = (new Date(value)).toISOString().slice(0, 10)
             } else if (input_element.type === 'number') {
               value = parseInt(value);
             }
