@@ -4,11 +4,14 @@ mod error;
 pub mod person;
 pub mod user;
 
+mod util;
+
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
 pub use self::database::Database;
 pub use self::error::Error;
+pub use self::util::{Date, DateError};
 
 /// A record with associated, numerical primary key.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]

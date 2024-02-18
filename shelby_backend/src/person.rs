@@ -1,13 +1,11 @@
-use crate::{DatabaseEntry, Error, PrimaryKey};
-use chrono::serde::ts_seconds_option;
+use crate::{DatabaseEntry, Date, Error, PrimaryKey};
 
 crate::macros::make_struct!(
     Person (Table with derived Default: "persons") depends on () => {
         name: String => "STRING NOT NULL",
         address: String => "STRING NOT NULL",
         email: Option<String> => "STRING",
-        #[serde(with = "ts_seconds_option")]
-        birthday: Option<chrono::DateTime<chrono::Utc>> => "DATETIME",
+        birthday: Option<Date> => "DATETIME",
         comment: Option<String> => "STRING"
     }
 );
@@ -22,7 +20,7 @@ crate::macros::make_struct!(
 pub struct Membership {
     pub person: PrimaryKey<Person>,
     pub group: PrimaryKey<Group>,
-    pub updated: Option<chrono::DateTime<chrono::Utc>>,
+    pub updated: Option<Date>,
     pub comment: Option<String>,
 }
 
@@ -158,7 +156,7 @@ mod membership_tests {
         let membership = Membership {
             person: p1.clone(),
             group: g1.clone(),
-            updated: chrono::DateTime::from_timestamp(100, 0),
+            updated: Some(crate::Date::today()),
             comment: Some(String::from("Example")),
         };
 

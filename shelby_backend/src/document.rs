@@ -1,6 +1,6 @@
-use chrono::{DateTime, Utc};
-
-use crate::{person::Person, user::User, DefaultGenerator, IndexableDatebaseEntry, PrimaryKey};
+use crate::{
+    person::Person, user::User, Date, DefaultGenerator, IndexableDatebaseEntry, PrimaryKey,
+};
 
 crate::macros::make_struct!(
     Document (Table: "documents") depends on (Person, User)  => {
@@ -8,8 +8,8 @@ crate::macros::make_struct!(
         processed_by: PrimaryKey<User> => "INTEGER NOT NULL",
         from_person: PrimaryKey<Person> => "INTEGER NOT NULL",
         to_person: PrimaryKey<Person> => "INTEGER NOT NULL",
-        recieved: DateTime<Utc> => "DATETIME NOT NULL",
-        processed: DateTime<Utc> => "DATETIME NOT NULL",
+        recieved: Date => "DATETIME NOT NULL",
+        processed: Date => "DATETIME NOT NULL",
         description: Option<String> => "STRING"
     } ("FOREIGN KEY(processed_by) REFERENCES users(id), FOREIGN KEY(from_person) REFERENCES persons(id), FOREIGN KEY(to_person) REFERENCES persons(id)")
 );
@@ -24,8 +24,8 @@ impl DefaultGenerator for Document {
             processed_by: user,
             from_person: person,
             to_person: person,
-            recieved: DateTime::default(),
-            processed: DateTime::default(),
+            recieved: Date::today(),
+            processed: Date::today(),
             description: None,
         }
     }
