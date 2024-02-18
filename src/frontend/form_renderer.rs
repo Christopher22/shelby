@@ -50,27 +50,49 @@ impl InsertableDatabaseEntry<5> for shelby_backend::person::Person {
         Field {
             id: "name",
             label: "Name",
-            attributes: &[],
+            attributes: &[
+                "type=\"text\"",
+                "class=\"form-control\"",
+                "placeholder=\"Full name of the person\"",
+                "required",
+            ],
         },
         Field {
             id: "address",
-            label: "Adress",
-            attributes: &[],
+            label: "Address",
+            attributes: &[
+                "type=\"text\"",
+                "class=\"form-control\"",
+                "placeholder=\"Address of the person\"",
+                "required",
+            ],
         },
         Field {
             id: "email",
             label: "E-Mail",
-            attributes: &[],
+            attributes: &[
+                "type=\"email\"",
+                "class=\"form-control\"",
+                "placeholder=\"E-Mail of the person\"",
+            ],
         },
         Field {
             id: "birthday",
             label: "Birthday",
-            attributes: &[],
+            attributes: &[
+                "type=\"date\"",
+                "class=\"form-control\"",
+                "placeholder=\"Birthday of the person\"",
+            ],
         },
         Field {
             id: "comment",
             label: "Comment",
-            attributes: &[],
+            attributes: &[
+                "type=\"text\"",
+                "class=\"form-control\"",
+                "placeholder=\"More comment regarding the person\"",
+            ],
         },
     ];
 }
@@ -93,7 +115,7 @@ impl InsertableDatabaseEntry<1> for shelby_backend::person::Group {
             "type=\"text\"",
             "class=\"form-control\"",
             "placeholder=\"Description of the new group\"",
-            "required=\"\"",
+            "required",
         ],
     }];
 }

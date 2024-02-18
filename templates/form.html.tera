@@ -17,7 +17,7 @@
 
     <hr class="my-4">
 
-    <button class="w-100 btn btn-primary btn-lg" type="submit">Update</button>
+    <button class="w-100 btn btn-primary btn-lg" type="submit">Create</button>
 </form>
 {% endblock main %}
 
@@ -55,13 +55,33 @@ function showInfoModal(title, message) {
 document.addEventListener("DOMContentLoaded", function() {
     document.getElementById('shelby_form').addEventListener('submit', function(e) {
         e.preventDefault(); // prevent default form submission
+      
+        // Check if all required fields are filled
+        if (!this.checkValidity()) {
+            // Show browser's native validation error messages
+            this.reportValidity();
+            return;
+        }
+
         var formData = new FormData(this);
         var dataToSend = {};
 
         // Serialize form data
         for (var pair of formData) {
-            var value = parseInt(pair[1]);
-            dataToSend[pair[0]] = isNaN(value) ? pair[1] : value;
+            var input_element = this.elements[pair[0]];
+            // Check if the field is optional and empty, skip if so
+            if (pair[1] === '' && !input_element.hasAttribute('required')) {
+                continue;
+            }
+
+            var value = pair[1];
+            if (input_element.type === 'date') {
+              value = (new Date(value)).getTime() / 1000;
+            } else if (input_element.type === 'number') {
+              value = parseInt(value);
+            }
+
+            dataToSend[pair[0]] = value;
         }
 
         // Deactivate form inputs
