@@ -273,12 +273,12 @@ pub(crate) mod macros {
 
     /// Create a indexable database entry.
     macro_rules! make_struct {
-        ($name: ident (Table $( with derived $derived: ident )?: $table_name: expr) depends on $dependencies: ty => { $($element: ident: $ty: ty => $value: expr),* } $( ($additional_conditions: expr) )?) => {
+        ($name: ident (Table $( with derived $derived: ident )?: $table_name: expr) depends on $dependencies: ty => { $( $(#[$os_attr: meta])? $element: ident: $ty: ty => $value: expr),* } $( ($additional_conditions: expr) )?) => {
             paste::paste! {
                 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
                 $(#[derive($derived)])?
                 pub struct $name {
-                    $( pub $element: $ty),*
+                    $( $(#[$os_attr])? pub $element: $ty),*
                 }
 
                 impl crate::DatabaseEntry for $name {

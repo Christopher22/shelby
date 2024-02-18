@@ -1,10 +1,12 @@
 use crate::{DatabaseEntry, Error, PrimaryKey};
+use chrono::serde::ts_seconds_option;
 
 crate::macros::make_struct!(
     Person (Table with derived Default: "persons") depends on () => {
         name: String => "STRING NOT NULL",
         address: String => "STRING NOT NULL",
         email: Option<String> => "STRING",
+        #[serde(with = "ts_seconds_option")]
         birthday: Option<chrono::DateTime<chrono::Utc>> => "DATETIME",
         comment: Option<String> => "STRING"
     }
