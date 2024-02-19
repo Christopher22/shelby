@@ -1,5 +1,5 @@
-use rocket::serde::Serialize;
-use serde::ser::SerializeStruct;
+use rocket::serde::ser::SerializeStruct;
+use rocket::serde::{Serialize, Serializer};
 
 use super::Renderable;
 
@@ -41,7 +41,7 @@ pub struct Field {
 impl Serialize for Field {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
         let mut result = match self.input_type {
             InputType::Text(meta)
