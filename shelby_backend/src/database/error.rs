@@ -34,15 +34,18 @@ impl std::error::Error for Error {}
 mod tests {
     use crate::{
         database::{Database, IndexableDatebaseEntry, PrimaryKey},
-        user::User,
+        user::{PasswordHash, User},
     };
 
     #[test]
     fn test_foreign_key_error() {
         let database = Database::in_memory().expect("valid database");
         let document = User {
+            username: String::from("Chris"),
+            password_hash: PasswordHash::new("Chris", "test1234"),
             related_to: Some(PrimaryKey::from(42)),
-            ..User::default()
+            active: true,
+            creation_date: crate::Date::today(),
         };
 
         assert!(document

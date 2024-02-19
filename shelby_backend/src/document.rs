@@ -2,8 +2,8 @@ use crate::database::{DefaultGenerator, IndexableDatebaseEntry, PrimaryKey};
 use crate::{person::Person, user::User, Date};
 
 crate::database::make_struct!(
-    Document (Table: "documents") depends on (Person, User)  => {
-        document: Vec<u8> ,
+    Document (Table with derived serde::Serialize, serde::Deserialize: "documents") depends on (Person, User)  => {
+        document: Vec<u8>,
         processed_by: PrimaryKey<User>,
         from_person: PrimaryKey<Person>,
         to_person: PrimaryKey<Person>,
@@ -16,7 +16,9 @@ crate::database::make_struct!(
 impl DefaultGenerator for Document {
     fn create_default(database: &crate::database::Database) -> Self {
         let person = Person::default().insert(&database).expect("valid person");
-        let user = User::default().insert(&database).expect("valid user");
+        let user = User::create_default(&database)
+            .insert(&database)
+            .expect("valid user");
 
         Document {
             document: Vec::default(),

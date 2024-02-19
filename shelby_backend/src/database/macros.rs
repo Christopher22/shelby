@@ -6,10 +6,10 @@ macro_rules! question_mark {
 
 /// Create a indexable database entry.
 macro_rules! make_struct {
-    ($name: ident (Table $( with derived $derived: ident )?: $table_name: expr) depends on $dependencies: ty => { $( $(#[$os_attr: meta])? $element: ident: $ty: ty),* } $( ($additional_conditions: expr) )?) => {
+    ($name: ident (Table $( with derived $( $derived: ty ),+ )?: $table_name: expr) depends on $dependencies: ty => { $( $(#[$os_attr: meta])? $element: ident: $ty: ty),* } $( ($additional_conditions: expr) )?) => {
         paste::paste! {
-            #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-            $(#[derive($derived)])?
+            #[derive(Debug, Clone, PartialEq, Eq)]
+            $(#[derive($( $derived ),+)])?
             pub struct $name {
                 $( $(#[$os_attr])? pub $element: $ty),*
             }
@@ -120,7 +120,7 @@ mod test {
     use crate::database::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey, Record};
 
     crate::database::make_struct!(
-        Test (Table with derived Default: "tests") depends on () => {
+        Test (Table with derived Default, serde::Serialize, serde::Deserialize: "tests") depends on () => {
             bool_value: bool,
             string_value: String,
             integer_value: u32
@@ -143,7 +143,7 @@ mod test {
     fn test_create_table_statement() {
         assert_eq!(
             Test::STATEMENT_CREATE_TABLE,
-            "CREATE TABLE IF NOT EXISTS tests (id INTEGER PRIMARY KEY, bool_value BOOL NOT NULL, string_value STRING NOT NULL, integer_value INTEGER NOT NULL )"
+            "CREATE TABLE IF NOT EXISTS tests (id INTEGER PRIMARY KEY, bool_value BOOL NOT NULL, string_value TEXT NOT NULL, integer_value INTEGER NOT NULL )"
         );
     }
 
