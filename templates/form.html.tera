@@ -82,6 +82,13 @@ document.addEventListener("DOMContentLoaded", function() {
               value = (new Date(value)).toISOString().slice(0, 10)
             } else if (input_element.type === 'number') {
               value = parseInt(value);
+            } else if (input_element.type === 'hidden') {
+              // Translate hidden booleans
+              if (value === "true") {
+                value = true;
+              } else if (value === "false") {
+                value = false;
+              }
             }
 
             dataToSend[pair[0]] = value;

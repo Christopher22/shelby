@@ -71,7 +71,7 @@ macro_rules! create_routes {
             mod [< test_ $function_name >] {
                 use super::{rocket, Config};
                 use rocket::{http::Status, local::blocking::Client, serde::json, State};
-                use shelby_backend::database::{DefaultGenerator, Record};
+                use shelby_backend::database::{DefaultGenerator, Record, IndexableDatebaseEntry};
                 use crate::frontend::RenderableDatabaseEntry;
 
                 type TargetEntity = super::$database_entry;
@@ -94,7 +94,8 @@ macro_rules! create_routes {
 
                 #[test]
                 fn test_get_empty_json() {
-                    let client = super::tests::login(rocket());
+                    // We need to check the number of elements here. For example, the users table will never be empty
+                    let (client, num_elements) = super::tests::login_with_callback(rocket(), |database| TargetEntity::select_all(database).expect("selecting all successfull").len());
                     let response = client.get(ACCESS_POINT).header(rocket::http::ContentType::JSON).dispatch();
                     assert_eq!(response.status(), Status::Ok);
                     assert_eq!(
@@ -102,8 +103,9 @@ macro_rules! create_routes {
                         Some(rocket::http::ContentType::JSON)
                     );
 
-                    let response_json: Vec<Record<TargetEntity>> = response.into_json().expect("valid json");
-                    assert_eq!(response_json.len(), 0);
+                    let response = response.into_string().expect("valid str");
+                    let response_json: Vec<Record<TargetEntity>> = json::from_str(&response).expect("valid json");
+                    assert_eq!(response_json.len(), num_elements);
                 }
 
                 #[test]
@@ -138,7 +140,7 @@ macro_rules! create_routes {
                         TargetEntity::create_default(&state.database())
                     };
 
-                    let client = super::tests::login(engine);
+                    let (client, num_elements) = super::tests::login_with_callback(engine, |database| TargetEntity::select_all(database).expect("selecting all successfull").len());
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
                     assert_eq!(creation_response.status(), Status::Created);
 
@@ -153,7 +155,7 @@ macro_rules! create_routes {
                     // let response_json: Vec<Record<TargetEntity>> = response.into_json().expect("valid json");
                     let response = response.into_string().expect("valid str");
                     let response_json: Vec<Record<TargetEntity>> = json::from_str(&response).expect("valid json");
-                    assert_eq!(response_json.len(), 1);
+                    assert_eq!(response_json.len(), num_elements + 1);
                 }
 
                 #[test]
@@ -238,6 +240,8 @@ macro_rules! write_routes {
 create_routes!("/persons" ("/persons/<id>", "/persons/new") => Person (person));
 create_routes!("/groups" ("/groups/<id>", "/groups/new") => Group (group));
 create_routes!("/documents" ("/documents/<id>", "/documents/new") => Document (document));
+// ToDo: Currently, the hashed password is accessible for admins. Should we fix that?
+create_routes!("/users" ("/users/<id>", "/users/new") => User (user));
 
 #[get("/", rank = 1)]
 async fn index_protected(_user: AuthenticatedUser<auth::Forward>) -> Template {
@@ -307,7 +311,8 @@ fn rocket() -> _ {
             write_routes!(
                 person,
                 group,
-                document + (index_protected, index_public, serve_files, login, logout)
+                document,
+                user + (index_protected, index_public, serve_files, login, logout)
             ),
         )
 }
@@ -323,7 +328,16 @@ mod tests {
         engine: rocket::Rocket<P>,
         credentials: &auth::Credentials,
     ) -> Client {
-        let _ = {
+        let (client, _) = add_user_with_callback(engine, credentials, |_| ());
+        client
+    }
+
+    fn add_user_with_callback<P: rocket::Phase, T>(
+        engine: rocket::Rocket<P>,
+        credentials: &auth::Credentials,
+        callback: impl Fn(&shelby_backend::database::Database) -> T,
+    ) -> (Client, T) {
+        let result = {
             let database_container: &State<Config> = State::get(&engine).expect("valid database");
             let database = database_container.database();
 
@@ -331,10 +345,12 @@ mod tests {
             user.username = String::from(&credentials.user);
             user.password_hash =
                 shelby_backend::user::PasswordHash::new(&credentials.user, &credentials.password);
-            user.insert(&database).expect("user insertion sucessfull")
+            user.insert(&database).expect("user insertion sucessfull");
+
+            callback(&database)
         };
 
-        Client::tracked(engine).expect("valid client")
+        (Client::tracked(engine).expect("valid client"), result)
     }
 
     /// Compare a recieved response with a template.
@@ -352,13 +368,16 @@ mod tests {
         assert_eq!(recieved_response, expected_output);
     }
 
-    pub fn login<P: rocket::Phase>(engine: rocket::Rocket<P>) -> Client {
+    pub fn login_with_callback<P: rocket::Phase, T>(
+        engine: rocket::Rocket<P>,
+        callback: impl Fn(&shelby_backend::database::Database) -> T,
+    ) -> (Client, T) {
         let credentials = auth::Credentials {
             user: String::from("Chris"),
             password: String::from("test1234"),
         };
 
-        let client = add_user(engine, &credentials);
+        let (client, result) = add_user_with_callback(engine, &credentials, callback);
 
         // Log in
         {
@@ -370,6 +389,11 @@ mod tests {
             assert_eq!(creation_response.status(), rocket::http::Status::SeeOther);
         }
 
+        (client, result)
+    }
+
+    pub fn login<P: rocket::Phase>(engine: rocket::Rocket<P>) -> Client {
+        let (client, _) = login_with_callback(engine, |_| ());
         client
     }
 

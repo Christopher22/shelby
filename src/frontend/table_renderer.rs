@@ -81,3 +81,19 @@ impl RenderableDatabaseEntry<4> for shelby_backend::document::Document {
         ]
     }
 }
+
+impl RenderableDatabaseEntry<4> for shelby_backend::user::User {
+    const TITLE: &'static str = "Users";
+    const COLUMNS: [&'static str; 4] = ["Identifier", "Name", "Creation date", "Used by"];
+
+    fn generate_table_row(user: Record<Self>) -> [String; 4] {
+        [
+            user.identifier.to_string(),
+            user.username.to_string(),
+            user.creation_date.to_string(),
+            user.related_to
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+        ]
+    }
+}

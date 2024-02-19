@@ -193,7 +193,7 @@ impl InsertableDatabaseEntry<5> for shelby_backend::user::User {
             attributes: &[],
         },
         Field {
-            id: "password_hash",
+            id: "password",
             input_type: InputType::Password(Metadata {
                 label: "Password",
                 placeholder: Some("Password of the new user"),
