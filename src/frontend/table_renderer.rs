@@ -20,6 +20,7 @@ where
         context! {
             title: &T::TITLE,
             headers: &T::COLUMNS,
+            url_add: &T::URL_ADD,
             rows: &self.0
         }
     }
@@ -31,6 +32,9 @@ pub trait RenderableDatabaseEntry<const N: usize>: IndexableDatebaseEntry {
 
     /// The columns of the table.
     const COLUMNS: [&'static str; N];
+
+    /// The path to the form to create a new element.
+    const URL_ADD: &'static str;
 
     /// Translate a record into a row of strings.
     fn generate_table_row(entry: Record<Self>) -> [String; N];
@@ -52,6 +56,7 @@ pub trait RenderableDatabaseEntry<const N: usize>: IndexableDatebaseEntry {
 impl RenderableDatabaseEntry<3> for shelby_backend::person::Person {
     const TITLE: &'static str = "Contacts";
     const COLUMNS: [&'static str; 3] = ["Name", "Address", "E-Mail"];
+    const URL_ADD: &'static str = "/persons/new";
 
     fn generate_table_row(entry: Record<Self>) -> [String; 3] {
         let value = entry.value;
@@ -62,6 +67,7 @@ impl RenderableDatabaseEntry<3> for shelby_backend::person::Person {
 impl RenderableDatabaseEntry<2> for shelby_backend::person::Group {
     const TITLE: &'static str = "Groups";
     const COLUMNS: [&'static str; 2] = ["Group", "Description"];
+    const URL_ADD: &'static str = "/groups/new";
 
     fn generate_table_row(group: Record<Self>) -> [String; 2] {
         [group.identifier.to_string(), group.value.description]
@@ -71,6 +77,7 @@ impl RenderableDatabaseEntry<2> for shelby_backend::person::Group {
 impl RenderableDatabaseEntry<4> for shelby_backend::document::Document {
     const TITLE: &'static str = "Documents";
     const COLUMNS: [&'static str; 4] = ["Name", "From", "To", "Description"];
+    const URL_ADD: &'static str = "/documents/new";
 
     fn generate_table_row(document: Record<Self>) -> [String; 4] {
         [
@@ -85,6 +92,7 @@ impl RenderableDatabaseEntry<4> for shelby_backend::document::Document {
 impl RenderableDatabaseEntry<4> for shelby_backend::user::User {
     const TITLE: &'static str = "Users";
     const COLUMNS: [&'static str; 4] = ["Identifier", "Name", "Creation date", "Used by"];
+    const URL_ADD: &'static str = "/users/new";
 
     fn generate_table_row(user: Record<Self>) -> [String; 4] {
         [
