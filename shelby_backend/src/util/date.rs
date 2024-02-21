@@ -23,6 +23,16 @@ impl Default for Date {
     }
 }
 
+impl<'a> TryFrom<&'a str> for Date {
+    type Error = Error;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .or(Err(Error))
+            .and_then(NaiveDate::try_into)
+    }
+}
+
 impl TryFrom<NaiveDate> for Date {
     type Error = Error;
 
@@ -100,9 +110,8 @@ impl<'de> serde::de::Visitor<'de> for DateVisitor {
     where
         E: serde::de::Error,
     {
-        let date = NaiveDate::parse_from_str(v, "%Y-%m-%d")
-            .map_err(|_| E::invalid_value(serde::de::Unexpected::Str(v), &self))?;
-        Date::try_from(date).map_err(|_| E::invalid_value(serde::de::Unexpected::Str(v), &self))
+        v.try_into()
+            .map_err(|_| E::invalid_value(serde::de::Unexpected::Str(v), &self))
     }
 }
 
