@@ -7,79 +7,97 @@ mod auth;
 mod config;
 mod error;
 mod frontend;
+mod util;
 
 use auth::{login, logout, AuthenticatedUser};
-use rocket::{fs::NamedFile, response::status, serde::json::Json, State};
+use rocket::{fs::NamedFile, serde::json::Json, State};
 use rocket_dyn_templates::{context, Template};
-use shelby_backend::{
-    database::{Database, DefaultGenerator, IndexableDatebaseEntry, Record},
-    document::Document,
-    person::{Group, Person},
-    user::User,
-};
+use shelby_backend::database::{Database, DefaultGenerator, IndexableDatebaseEntry};
 use std::path::PathBuf;
 
+pub use self::frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry};
+pub use self::util::FlexibleInput;
 pub use self::{config::Config, error::Error};
-pub use frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry};
 
 macro_rules! create_routes {
-    ($path: literal ($path_id: literal, $path_add: literal) => $database_entry: ident ($function_name: ident)) => {
-        paste::paste! {
-            #[post($path, format = "json", data = "<database_entry>", rank = 3)]
-            fn [< add_ $function_name >](
+    ($database_entry: ty {
+        module: $function_name: ident,
+        url: $path: literal,
+        get: $path_id: literal,
+        post: $path_add: literal ($data_guard: ident)
+    }) => {
+        mod $function_name {
+            use rocket::{response::status, serde::json::Json, State};
+            use rocket_dyn_templates::Template;
+            use shelby_backend::database::{IndexableDatebaseEntry, Record};
+
+            use crate::{
+                auth::AuthenticatedUser,
+                frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry},
+                *,
+            };
+
+            type DatabaseEntry = $database_entry;
+            type InputType = $data_guard<DatabaseEntry>;
+
+            #[post($path, data = "<database_entry>", rank = 3)]
+            pub fn add(
                 _user: AuthenticatedUser,
-                database_entry: Json<$database_entry>,
+                database_entry: InputType,
                 state: &State<Config>,
             ) -> Result<status::Created<String>, Error> {
                 database_entry
-                    .0
+                    .into_inner()
                     .insert(&state.database())
                     .map(|primary_key| status::Created::new(primary_key.to_string()))
                     .map_err(Error::from)
             }
 
             #[get($path, rank = 3)]
-            fn [< get_all_ $function_name s >](
+            pub fn get_all(
                 _user: AuthenticatedUser,
                 state: &State<Config>,
                 content_type: Option<&rocket::http::ContentType>,
-            ) -> Result<Result<Template, Json<Vec<Record<$database_entry>>>>, Error> {
+            ) -> Result<Result<Template, Json<Vec<Record<DatabaseEntry>>>>, Error> {
                 let database = &state.database();
                 Ok(match content_type {
-                    Some(value) if value.0.is_json() => Err(Json($database_entry::select_all(&database)?)),
-                    _ => Ok($database_entry::prepare_rendering_all(&database)?.render()),
+                    Some(value) if value.0.is_json() => {
+                        Err(Json(<$database_entry>::select_all(&database)?))
+                    }
+                    _ => Ok(<$database_entry>::prepare_rendering_all(&database)?.render()),
                 })
             }
 
             #[get($path_id, rank = 3)]
-            fn [< get_ $function_name _by_id>](_user: AuthenticatedUser, id: i64, state: &State<Config>) -> Result<Json<Record<$database_entry>>, Error> {
-                match $database_entry::try_select(
-                    &state.database(),
-                    id
-                )? {
+            pub fn get_by_id(
+                _user: AuthenticatedUser,
+                id: i64,
+                state: &State<Config>,
+            ) -> Result<Json<Record<DatabaseEntry>>, Error> {
+                match DatabaseEntry::try_select(&state.database(), id)? {
                     Some(value) => Ok(Json(value)),
-                    None => Err(Error::NotFound)
+                    None => Err(Error::NotFound),
                 }
             }
 
             #[get($path_add, rank = 2)]
-            fn [< add_ $function_name _frontend>](_user: AuthenticatedUser) -> Template {
-                $database_entry::prepare_rendering($path).render()
+            pub fn add_frontend(_user: AuthenticatedUser) -> Template {
+                DatabaseEntry::prepare_rendering($path).render()
             }
 
             #[cfg(test)]
-            mod [< test_ $function_name >] {
-                use super::{rocket, Config};
-                use rocket::{http::Status, local::blocking::Client, serde::json, State};
-                use shelby_backend::database::{DefaultGenerator, Record, IndexableDatebaseEntry};
+            mod tests {
                 use crate::frontend::RenderableDatabaseEntry;
+                use crate::{rocket, Config};
+                use rocket::{http::Status, local::blocking::Client, serde::json, State};
+                use shelby_backend::database::{DefaultGenerator, IndexableDatebaseEntry, Record};
 
-                type TargetEntity = super::$database_entry;
+                use super::DatabaseEntry as TargetEntity;
                 const ACCESS_POINT: &'static str = $path;
 
                 #[test]
                 fn test_get_empty() {
-                    let client = super::tests::login(rocket());
+                    let client = crate::tests::login(rocket());
                     let response = client.get(ACCESS_POINT).dispatch();
                     assert_eq!(response.status(), Status::Ok);
                     assert_eq!(
@@ -95,8 +113,16 @@ macro_rules! create_routes {
                 #[test]
                 fn test_get_empty_json() {
                     // We need to check the number of elements here. For example, the users table will never be empty
-                    let (client, num_elements) = super::tests::login_with_callback(rocket(), |database| TargetEntity::select_all(database).expect("selecting all successfull").len());
-                    let response = client.get(ACCESS_POINT).header(rocket::http::ContentType::JSON).dispatch();
+                    let (client, num_elements) =
+                        crate::tests::login_with_callback(rocket(), |database| {
+                            TargetEntity::select_all(database)
+                                .expect("selecting all successfull")
+                                .len()
+                        });
+                    let response = client
+                        .get(ACCESS_POINT)
+                        .header(rocket::http::ContentType::JSON)
+                        .dispatch();
                     assert_eq!(response.status(), Status::Ok);
                     assert_eq!(
                         response.content_type(),
@@ -104,7 +130,8 @@ macro_rules! create_routes {
                     );
 
                     let response = response.into_string().expect("valid str");
-                    let response_json: Vec<Record<TargetEntity>> = json::from_str(&response).expect("valid json");
+                    let response_json: Vec<Record<TargetEntity>> =
+                        json::from_str(&response).expect("valid json");
                     assert_eq!(response_json.len(), num_elements);
                 }
 
@@ -116,7 +143,7 @@ macro_rules! create_routes {
                         TargetEntity::create_default(&state.database())
                     };
 
-                    let client = super::tests::login(engine);
+                    let client = crate::tests::login(engine);
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
                     assert_eq!(creation_response.status(), Status::Created);
 
@@ -140,11 +167,19 @@ macro_rules! create_routes {
                         TargetEntity::create_default(&state.database())
                     };
 
-                    let (client, num_elements) = super::tests::login_with_callback(engine, |database| TargetEntity::select_all(database).expect("selecting all successfull").len());
+                    let (client, num_elements) =
+                        crate::tests::login_with_callback(engine, |database| {
+                            TargetEntity::select_all(database)
+                                .expect("selecting all successfull")
+                                .len()
+                        });
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
                     assert_eq!(creation_response.status(), Status::Created);
 
-                    let response = client.get(ACCESS_POINT).header(rocket::http::ContentType::JSON).dispatch();
+                    let response = client
+                        .get(ACCESS_POINT)
+                        .header(rocket::http::ContentType::JSON)
+                        .dispatch();
                     assert_eq!(response.status(), Status::Ok);
                     assert_eq!(
                         response.content_type(),
@@ -154,7 +189,8 @@ macro_rules! create_routes {
                     // Why does this fail?
                     // let response_json: Vec<Record<TargetEntity>> = response.into_json().expect("valid json");
                     let response = response.into_string().expect("valid str");
-                    let response_json: Vec<Record<TargetEntity>> = json::from_str(&response).expect("valid json");
+                    let response_json: Vec<Record<TargetEntity>> =
+                        json::from_str(&response).expect("valid json");
                     assert_eq!(response_json.len(), num_elements + 1);
                 }
 
@@ -166,23 +202,26 @@ macro_rules! create_routes {
                         TargetEntity::create_default(&state.database())
                     };
 
-                    let client = super::tests::login(engine);
+                    let client = crate::tests::login(engine);
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
                     assert_eq!(creation_response.status(), Status::Created);
 
-                    let primary_key_path = creation_response.headers().get_one("Location").expect("valid string");
+                    let primary_key_path = creation_response
+                        .headers()
+                        .get_one("Location")
+                        .expect("valid string");
                     let response = client.get(primary_key_path).dispatch();
                     assert_eq!(response.status(), Status::Ok);
 
                     let response = response.into_string().expect("valid str");
-                    let response_json: Record<TargetEntity> = json::from_str(&response).expect("valid json");
+                    let response_json: Record<TargetEntity> =
+                        json::from_str(&response).expect("valid json");
                     assert_eq!(*response_json, example);
                 }
 
-
                 #[test]
                 fn test_get_by_id_not_found() {
-                    let client = super::tests::login(rocket());
+                    let client = crate::tests::login(rocket());
                     let response = client.get(format!("{}/42", ACCESS_POINT)).dispatch();
                     assert_eq!(response.status(), Status::NotFound);
                 }
@@ -216,7 +255,7 @@ macro_rules! create_routes {
 
                 #[test]
                 fn test_logout() {
-                    let client = super::tests::login(rocket());
+                    let client = crate::tests::login(rocket());
 
                     let login_response = client.get("/users/logout").dispatch();
                     assert_eq!(login_response.status(), rocket::http::Status::SeeOther);
@@ -226,22 +265,45 @@ macro_rules! create_routes {
                 }
             }
         }
-    }
+    };
 }
 
 macro_rules! write_routes {
     ($($function_name: ident),* + ($($additional: ident),*)) => { paste::paste! {
         routes![$($additional),*, $(
-            [< add_ $function_name >], [< get_all_ $function_name s >], [< get_ $function_name _by_id>], [< add_ $function_name _frontend>]
+            $function_name::add, $function_name::get_all, $function_name::get_by_id, $function_name::add_frontend
         ),*]
     }};
 }
 
-create_routes!("/persons" ("/persons/<id>", "/persons/new") => Person (person));
-create_routes!("/groups" ("/groups/<id>", "/groups/new") => Group (group));
-create_routes!("/documents" ("/documents/<id>", "/documents/new") => Document (document));
+create_routes!(shelby_backend::person::Person {
+    module: person,
+    url: "/persons",
+    get: "/persons/<id>",
+    post: "/persons/new"(Json)
+});
+
+create_routes!(shelby_backend::person::Group {
+    module: group,
+    url: "/groups",
+    get: "/groups/<id>",
+    post: "/groups/new"(Json)
+});
+
+create_routes!(shelby_backend::document::Document {
+    module: document,
+    url: "/documents",
+    get: "/documents/<id>",
+    post: "/documents/new"(FlexibleInput)
+});
+
 // ToDo: Currently, the hashed password is accessible for admins. Should we fix that?
-create_routes!("/users" ("/users/<id>", "/users/new") => User (user));
+create_routes!(shelby_backend::user::User {
+    module: user,
+    url: "/users",
+    get: "/users/<id>",
+    post: "/users/new"(Json)
+});
 
 #[get("/", rank = 1)]
 async fn index_protected(_user: AuthenticatedUser<auth::Forward>) -> Template {
