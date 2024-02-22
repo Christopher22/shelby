@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use super::IndexableDatebaseEntry;
 
 /// The primary key of a record.
@@ -35,28 +37,7 @@ impl<'de, T: IndexableDatebaseEntry> serde::de::Visitor<'de> for PrimaryKeyVisit
     where
         E: serde::de::Error,
     {
-        let mut iterator = v.split('/').rev();
-
-        let primary_key: i64 =
-            iterator
-                .next()
-                .and_then(|value| value.parse().ok())
-                .ok_or(E::invalid_value(
-                    serde::de::Unexpected::Other("invalid number"),
-                    &self,
-                ))?;
-
-        match iterator.next() {
-            Some(value) if value == T::TABLE_NAME => Ok(PrimaryKey::from(primary_key)),
-            Some(_) => Err(E::invalid_value(
-                serde::de::Unexpected::Other("invalid identifier"),
-                &self,
-            )),
-            None => Err(E::invalid_value(
-                serde::de::Unexpected::Other("invalid path"),
-                &self,
-            )),
-        }
+        PrimaryKey::from_str(v).map_err(|error| E::custom(error.to_string()))
     }
 }
 
@@ -107,5 +88,91 @@ impl<T: IndexableDatebaseEntry> rusqlite::ToSql for PrimaryKey<T> {
 impl<T: IndexableDatebaseEntry> rusqlite::types::FromSql for PrimaryKey<T> {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         i64::column_result(value).map(PrimaryKey::from)
+    }
+}
+
+impl<T: IndexableDatebaseEntry> std::str::FromStr for PrimaryKey<T> {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Attempt to parse the input string directly as an integer
+        if let Ok(id) = s.parse::<i64>() {
+            return Ok(PrimaryKey(id, std::marker::PhantomData));
+        }
+
+        // Split the string by '/' and try to parse the second part as i64
+        let parts: Vec<&str> = s.split('/').collect();
+        if parts.len() != 3 {
+            return Err(ParseError::InvalidFormat);
+        }
+        let table_name = parts[1];
+        if table_name != T::TABLE_NAME {
+            return Err(ParseError::TableNameMismatch);
+        }
+        let id = parts[2].parse::<i64>().map_err(ParseError::ParseIntError)?;
+        Ok(PrimaryKey(id, std::marker::PhantomData))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParseError {
+    InvalidFormat,
+    TableNameMismatch,
+    ParseIntError(std::num::ParseIntError),
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::InvalidFormat => write!(f, "Invalid format"),
+            ParseError::TableNameMismatch => write!(f, "Table name mismatch"),
+            ParseError::ParseIntError(err) => write!(f, "Parse int error: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        database::{PrimaryKey, PrimaryKeyParseError},
+        person::Person,
+    };
+
+    #[test]
+    fn test_parse_valid_string() {
+        let parsed = "/persons/123".parse::<PrimaryKey<Person>>();
+        assert_eq!(parsed, Ok(PrimaryKey::from(123)));
+    }
+
+    #[test]
+    fn test_parse_valid_number_string() {
+        let parsed = "456".parse::<PrimaryKey<Person>>();
+        assert_eq!(parsed, Ok(PrimaryKey::from(456)));
+    }
+
+    #[test]
+    fn test_parse_invalid_string() {
+        let parsed = "/wrong_table/123".parse::<PrimaryKey<Person>>();
+        assert_eq!(parsed, Err(PrimaryKeyParseError::TableNameMismatch));
+    }
+
+    #[test]
+    fn test_deserialize_valid_string() {
+        let deserialized: PrimaryKey<Person> = serde_json::from_str(r#""/persons/123""#).unwrap();
+        assert_eq!(deserialized, PrimaryKey::from(123));
+    }
+
+    #[test]
+    fn test_deserialize_valid_number_string() {
+        let deserialized: PrimaryKey<Person> = serde_json::from_str(r#""456""#).unwrap();
+        assert_eq!(deserialized, PrimaryKey::from(456));
+    }
+
+    #[test]
+    fn test_deserialize_invalid_string() {
+        let deserialized: Result<PrimaryKey<Person>, _> = serde_json::from_str(r#""/persons/123""#);
+        assert!(deserialized.is_err());
     }
 }
