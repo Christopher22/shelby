@@ -2,6 +2,9 @@ use rocket::serde::ser::SerializeStruct;
 use rocket::serde::{Serialize, Serializer};
 
 use super::Renderable;
+use crate::util::FormInputType;
+
+type Context = crate::auth::AuthenticatedUser;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputType {
@@ -9,7 +12,8 @@ pub enum InputType {
     Email(Metadata),
     Password(Metadata),
     Date(Metadata),
-    Hidden(fn() -> String),
+    File(FileMetadata),
+    Hidden(fn(&Context) -> String),
 }
 
 impl InputType {
@@ -20,6 +24,7 @@ impl InputType {
             InputType::Email(_) => "email",
             InputType::Date(_) => "date",
             InputType::Hidden(_) => "hidden",
+            InputType::File(_) => "file",
         }
     }
 }
@@ -31,32 +36,69 @@ pub struct Metadata {
     required: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileMetadata {
+    label: &'static str,
+    extensions: &'static [&'static str],
+    multiple: bool,
+}
+
 #[derive(Debug)]
-pub struct Field {
+pub struct Field<T = ()> {
     id: &'static str,
     input_type: InputType,
     attributes: &'static [&'static str],
+    context: T,
 }
 
-impl Serialize for Field {
+impl Field<()> {
+    pub const fn new(id: &'static str, input_type: InputType) -> Self {
+        Field {
+            id,
+            input_type,
+            attributes: &[],
+            context: (),
+        }
+    }
+
+    pub const fn set_context<C>(self, context: C) -> Field<C> {
+        Field {
+            id: self.id,
+            input_type: self.input_type,
+            attributes: self.attributes,
+            context,
+        }
+    }
+}
+
+impl<'a> Serialize for Field<&'a Context> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
+        const NUM_GENERAL_ELEMENTS: usize = 3;
+
         let mut result = match self.input_type {
             InputType::Text(meta)
             | InputType::Email(meta)
             | InputType::Date(meta)
             | InputType::Password(meta) => {
-                let mut result = serializer.serialize_struct("Field", 6)?;
+                let mut result = serializer.serialize_struct("Field", NUM_GENERAL_ELEMENTS + 3)?;
                 result.serialize_field("required", &meta.required)?;
                 result.serialize_field("placeholder", &meta.placeholder)?;
                 result.serialize_field("label", &meta.label)?;
                 result
             }
             InputType::Hidden(value_generator) => {
-                let mut result = serializer.serialize_struct("Field", 4)?;
-                result.serialize_field("value", &value_generator())?;
+                let mut result = serializer.serialize_struct("Field", NUM_GENERAL_ELEMENTS + 1)?;
+                result.serialize_field("value", &value_generator(&self.context))?;
+                result
+            }
+            InputType::File(meta_data) => {
+                let mut result = serializer.serialize_struct("Field", NUM_GENERAL_ELEMENTS + 3)?;
+                result.serialize_field("accept", meta_data.extensions)?;
+                result.serialize_field("label", meta_data.label)?;
+                result.serialize_field("multiple", &meta_data.multiple)?;
                 result
             }
         };
@@ -68,157 +110,203 @@ impl Serialize for Field {
     }
 }
 
-pub trait InsertableDatabaseEntry<const N: usize>: Sized {
+/// A database entry which might be inserted over a form.
+pub trait InsertableDatabaseEntry: Sized {
+    /// The method hwo data is send to the webserver.
+    type PostMethod: for<'a> FormInputType<'a>;
+    /// The type for storing the fields. Should be an array of fields. However, this avoids generic arguments in the trait definition.
+    type FieldsType;
+
     const NAME: &'static str;
-    const FIELDS: [Field; N];
+    const FIELDS: Self::FieldsType;
 
-    fn prepare_rendering(post_url: &'static str) -> InsertFormRenderer<N, Self> {
-        InsertFormRenderer::new(post_url)
+    fn prepare_rendering<C>(post_url: &'static str, context: C) -> InsertFormRenderer<Self, C> {
+        InsertFormRenderer::new(post_url, context)
     }
 }
 
-pub struct InsertFormRenderer<const N: usize, T>(
-    &'static str,
-    std::marker::PhantomData<*const [T; N]>,
-);
+pub struct InsertFormRenderer<T, C>(&'static str, C, std::marker::PhantomData<*const T>);
 
-impl<const N: usize, T> InsertFormRenderer<N, T> {
-    fn new(post_url: &'static str) -> Self {
-        Self(post_url, std::marker::PhantomData)
+impl<T, C> InsertFormRenderer<T, C> {
+    fn new(post_url: &'static str, context: C) -> Self {
+        Self(post_url, context, std::marker::PhantomData)
     }
 }
 
-impl<const N: usize, T: InsertableDatabaseEntry<N>> Renderable for InsertFormRenderer<N, T>
+impl<const N: usize, T: InsertableDatabaseEntry<FieldsType = [Field; N]>, C> Renderable
+    for InsertFormRenderer<T, C>
 where
-    [Field; N]: Serialize,
+    for<'a> [Field<&'a C>; N]: Serialize,
 {
     const TEMPLATE: &'static str = "form";
 
     fn generate_context(&self) -> impl rocket::serde::Serialize {
+        let fields_with_context = T::FIELDS.map(|value| value.set_context(&self.1));
         rocket_dyn_templates::context! {
             name: &T::NAME,
-            fields: &T::FIELDS,
-            post_url: self.0
+            fields: fields_with_context,
+            post_url: self.0,
+            method: T::PostMethod::DATA_TYPE
         }
     }
 }
 
-impl InsertableDatabaseEntry<5> for shelby_backend::person::Person {
+impl InsertableDatabaseEntry for shelby_backend::person::Person {
     const NAME: &'static str = "New person";
     const FIELDS: [Field; 5] = [
-        Field {
-            id: "name",
-            input_type: InputType::Text(Metadata {
+        Field::new(
+            "name",
+            InputType::Text(Metadata {
                 label: "Name",
                 placeholder: Some("Full name of the person"),
                 required: true,
             }),
-            attributes: &[],
-        },
-        Field {
-            id: "address",
-            input_type: InputType::Text(Metadata {
+        ),
+        Field::new(
+            "address",
+            InputType::Text(Metadata {
                 label: "Address",
                 placeholder: Some("Address of the person"),
                 required: true,
             }),
-            attributes: &[],
-        },
-        Field {
-            id: "email",
-            input_type: InputType::Email(Metadata {
+        ),
+        Field::new(
+            "email",
+            InputType::Email(Metadata {
                 label: "E-Mail",
                 placeholder: Some("E-mail of the person"),
                 required: true,
             }),
-            attributes: &[],
-        },
-        Field {
-            id: "birthday",
-            input_type: InputType::Date(Metadata {
+        ),
+        Field::new(
+            "birthday",
+            InputType::Date(Metadata {
                 label: "Birthday",
                 placeholder: Some("Birthday of the person"),
                 required: false,
             }),
-            attributes: &[],
-        },
-        Field {
-            id: "comment",
-            input_type: InputType::Text(Metadata {
+        ),
+        Field::new(
+            "comment",
+            InputType::Text(Metadata {
                 label: "Comment",
                 placeholder: Some("More comments regarding the person"),
                 required: false,
             }),
-            attributes: &[],
-        },
+        ),
     ];
+
+    type PostMethod = rocket::serde::json::Json<Self>;
+    type FieldsType = [Field; 5];
 }
 
-impl InsertableDatabaseEntry<1> for shelby_backend::document::Document {
+impl InsertableDatabaseEntry for shelby_backend::document::Document {
     const NAME: &'static str = "New document";
-    const FIELDS: [Field; 1] = [Field {
-        id: "name",
-        input_type: InputType::Text(Metadata {
-            label: "Name",
-            placeholder: Some("The name of the document"),
-            required: true,
-        }),
-        attributes: &[],
-    }];
+    const FIELDS: [Field; 7] = [
+        Field::new(
+            "document",
+            InputType::File(FileMetadata {
+                label: "File",
+                extensions: &[".pdf"],
+                multiple: false,
+            }),
+        ),
+        Field::new(
+            "from_person",
+            InputType::Text(Metadata {
+                label: "From",
+                placeholder: Some("ID of the sending person"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "to_person",
+            InputType::Text(Metadata {
+                label: "To",
+                placeholder: Some("ID of the recieving person"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "recieved",
+            InputType::Date(Metadata {
+                label: "Recieved",
+                placeholder: Some("The date the document was recieved"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "description",
+            InputType::Text(Metadata {
+                label: "Description",
+                placeholder: Some("The description of the document"),
+                required: false,
+            }),
+        ),
+        // Private field from here
+        Field::new(
+            "processed_by",
+            InputType::Hidden(|user| user.user.to_string()),
+        ),
+        Field::new(
+            "processed",
+            InputType::Hidden(|_| shelby_backend::Date::today().to_string()),
+        ),
+    ];
+
+    type PostMethod = crate::util::FlexibleInput<Self>;
+    type FieldsType = [Field; 7];
 }
 
-impl InsertableDatabaseEntry<1> for shelby_backend::person::Group {
+impl InsertableDatabaseEntry for shelby_backend::person::Group {
     const NAME: &'static str = "New group";
-    const FIELDS: [Field; 1] = [Field {
-        id: "description",
-        input_type: InputType::Text(Metadata {
+    const FIELDS: [Field; 1] = [Field::new(
+        "description",
+        InputType::Text(Metadata {
             label: "Description",
             placeholder: Some("Description of the new group"),
             required: true,
         }),
-        attributes: &[],
-    }];
+    )];
+
+    type PostMethod = rocket::serde::json::Json<Self>;
+    type FieldsType = [Field; 1];
 }
 
-impl InsertableDatabaseEntry<5> for shelby_backend::user::User {
+impl InsertableDatabaseEntry for shelby_backend::user::User {
     const NAME: &'static str = "New user";
     const FIELDS: [Field; 5] = [
-        Field {
-            id: "username",
-            input_type: InputType::Text(Metadata {
+        Field::new(
+            "username",
+            InputType::Text(Metadata {
                 label: "User name",
                 placeholder: Some("Name of the new user"),
                 required: true,
             }),
-            attributes: &[],
-        },
-        Field {
-            id: "password",
-            input_type: InputType::Password(Metadata {
+        ),
+        Field::new(
+            "password",
+            InputType::Password(Metadata {
                 label: "Password",
                 placeholder: Some("Password of the new user"),
                 required: true,
             }),
-            attributes: &[],
-        },
-        Field {
-            id: "related_to",
-            input_type: InputType::Text(Metadata {
+        ),
+        Field::new(
+            "related_to",
+            InputType::Text(Metadata {
                 label: "Primary user",
                 placeholder: Some("ID of the primary user"),
                 required: false,
             }),
-            attributes: &[],
-        },
-        Field {
-            id: "creation_date",
-            input_type: InputType::Hidden(|| shelby_backend::Date::today().to_string()),
-            attributes: &[],
-        },
-        Field {
-            id: "active",
-            input_type: InputType::Hidden(|| String::from("true")),
-            attributes: &[],
-        },
+        ),
+        Field::new(
+            "creation_date",
+            InputType::Hidden(|_| shelby_backend::Date::today().to_string()),
+        ),
+        Field::new("active", InputType::Hidden(|_| String::from("true"))),
     ];
+
+    type PostMethod = rocket::serde::json::Json<Self>;
+    type FieldsType = [Field; 5];
 }

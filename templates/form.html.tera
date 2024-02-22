@@ -3,18 +3,22 @@
 <h4 class="mb-3">{{ name }}</h4>
 <form id="shelby_form" class="needs-validation" novalidate="">
     {% for field in fields %}
-    {% if field.input_type != "hidden" %}
+    {% if field.input_type == "hidden" %}
+    <input type="hidden" id="{{field.name}}" name="{{field.name}}" value="{{field.value}}" />
+    {% else %}
     <div class="col-12">
         <label for="{{field.name}}" class="form-label">{{field.label}}</label>
         <div class="input-group has-validation">
+        {% if field.input_type == "file" %}
+        <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" accept="{{field.accept}}" multiple="{{field.multiple}}" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
+        {% else %}
         <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" placeholder="{{field.placeholder}}" {% if field.required == true %} required {% endif %} {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
+        {% endif %}
         <div class="invalid-feedback">
             Valus is required.
         </div>
         </div>
     </div>
-    {% else %}
-    <input type="hidden" id="{{field.name}}" name="{{field.name}}" value="{{field.value}}" />
     {% endif %}
     {% endfor %}
 
@@ -67,7 +71,7 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         var formData = new FormData(this);
-        var dataToSend = {};
+        var dataToSend = new FormData();
 
         // Serialize form data
         for (var pair of formData) {
@@ -91,7 +95,8 @@ document.addEventListener("DOMContentLoaded", function() {
               }
             }
 
-            dataToSend[pair[0]] = value;
+            dataToSend.append(pair[0], value);
+            // dataToSend[pair[0]] = value;
         }
 
         // Deactivate form inputs
@@ -103,7 +108,7 @@ document.addEventListener("DOMContentLoaded", function() {
         // Send data via Ajax
         var xhr = new XMLHttpRequest();
         xhr.open('POST', "{{post_url | safe}}", true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
+        
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4) {
                 if (xhr.status === 201) {
@@ -119,7 +124,12 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         };
 
-        xhr.send(JSON.stringify(dataToSend));
+        if("{{method}}" === "application&#x2F;json") {
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          // Supported in Supported in Chrome 73+, Firefox 63+, Safari 12.1
+          dataToSend = JSON.stringify(Object.fromEntries(dataToSend));
+        } 
+        xhr.send(dataToSend);
     });
 });
 </script>

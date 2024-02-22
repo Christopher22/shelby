@@ -10,6 +10,7 @@ mod frontend;
 mod util;
 
 use auth::{login, logout, AuthenticatedUser};
+use rocket::data::{Limits, ToByteUnit};
 use rocket::{fs::NamedFile, serde::json::Json, State};
 use rocket_dyn_templates::{context, Template};
 use shelby_backend::database::{Database, DefaultGenerator, IndexableDatebaseEntry};
@@ -24,7 +25,7 @@ macro_rules! create_routes {
         module: $function_name: ident,
         url: $path: literal,
         get: $path_id: literal,
-        post: $path_add: literal ($data_guard: ident)
+        post: $path_add: literal
     }) => {
         mod $function_name {
             use rocket::{response::status, serde::json::Json, State};
@@ -38,7 +39,7 @@ macro_rules! create_routes {
             };
 
             type DatabaseEntry = $database_entry;
-            type InputType = $data_guard<DatabaseEntry>;
+            type InputType = <$database_entry as InsertableDatabaseEntry>::PostMethod;
 
             #[post($path, data = "<database_entry>", rank = 3)]
             pub fn add(
@@ -81,8 +82,8 @@ macro_rules! create_routes {
             }
 
             #[get($path_add, rank = 2)]
-            pub fn add_frontend(_user: AuthenticatedUser) -> Template {
-                DatabaseEntry::prepare_rendering($path).render()
+            pub fn add_frontend(user: AuthenticatedUser) -> Template {
+                DatabaseEntry::prepare_rendering($path, user).render()
             }
 
             #[cfg(test)]
@@ -280,21 +281,21 @@ create_routes!(shelby_backend::person::Person {
     module: person,
     url: "/persons",
     get: "/persons/<id>",
-    post: "/persons/new"(Json)
+    post: "/persons/new"
 });
 
 create_routes!(shelby_backend::person::Group {
     module: group,
     url: "/groups",
     get: "/groups/<id>",
-    post: "/groups/new"(Json)
+    post: "/groups/new"
 });
 
 create_routes!(shelby_backend::document::Document {
     module: document,
     url: "/documents",
     get: "/documents/<id>",
-    post: "/documents/new"(FlexibleInput)
+    post: "/documents/new"
 });
 
 // ToDo: Currently, the hashed password is accessible for admins. Should we fix that?
@@ -302,7 +303,7 @@ create_routes!(shelby_backend::user::User {
     module: user,
     url: "/users",
     get: "/users/<id>",
-    post: "/users/new"(Json)
+    post: "/users/new"
 });
 
 #[get("/", rank = 1)]
@@ -357,9 +358,16 @@ fn rocket() -> _ {
         }
     };
 
+    let limits = Limits::default()
+        .limit("form", 5.mebibytes())
+        .limit("file", 5.mebibytes())
+        .limit("data-form", 5.mebibytes())
+        .limit("bytes", 5.mebibytes());
+
     let figment = rocket::Config::figment().merge(
         rocket::figment::providers::Serialized::defaults(rocket::Config {
             secret_key: rocket::config::SecretKey::generate().expect("safe RNG available"),
+            limits,
             ..Default::default()
         }),
     );

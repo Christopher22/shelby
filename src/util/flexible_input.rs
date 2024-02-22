@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use rocket::{
     async_trait,
     data::{FromData, Outcome},
@@ -73,12 +75,26 @@ impl<'r> std::fmt::Display for MappingError<'r> {
 
 impl<'r> std::error::Error for MappingError<'r> {}
 
+/// The format of POST requests which could be understood through the FlexibleInput.
+pub trait FormInputType<'a>: rocket::data::FromData<'a> {
+    /// The type of data send.
+    const DATA_TYPE: &'static str;
+}
+
+impl<'a, T: rocket::serde::Deserialize<'a>> FormInputType<'a> for Json<T> {
+    const DATA_TYPE: &'static str = "application/json";
+}
+
+impl<'a, T: MappableForm> FormInputType<'a> for FlexibleInput<T> {
+    const DATA_TYPE: &'static str = "multipart/form-data";
+}
+
 #[derive(FromForm)]
 pub struct DocumentForm<'r> {
     document: &'r [u8],
-    processed_by: i64,
-    from_person: i64,
-    to_person: i64,
+    processed_by: String,
+    from_person: String,
+    to_person: String,
     recieved: String,
     processed: String,
     description: Option<String>,
@@ -100,9 +116,18 @@ impl MappableForm for shelby_backend::document::Document {
 
         Ok(Document {
             document: Vec::from(form.document),
-            processed_by: PrimaryKey::from(form.processed_by),
-            from_person: PrimaryKey::from(form.from_person),
-            to_person: PrimaryKey::from(form.to_person),
+            processed_by: PrimaryKey::from_str(&form.processed_by).or(Err((
+                Status::BadRequest,
+                MappingError::MappingError("'process_by' is not a valid primary key'"),
+            )))?,
+            from_person: PrimaryKey::from_str(&form.from_person).or(Err((
+                Status::BadRequest,
+                MappingError::MappingError("'from_person' is not a valid primary key'"),
+            )))?,
+            to_person: PrimaryKey::from_str(&form.to_person).or(Err((
+                Status::BadRequest,
+                MappingError::MappingError("'to_person' is not a valid primary key'"),
+            )))?,
             recieved,
             processed,
             description: form.description,

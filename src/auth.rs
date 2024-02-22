@@ -61,7 +61,7 @@ impl Strategy for Fail {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct AuthenticatedUser<T = Fail> {
-    user: PrimaryKey<User>,
+    pub user: PrimaryKey<User>,
     strategy: T,
 }
 
