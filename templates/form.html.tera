@@ -96,7 +96,6 @@ document.addEventListener("DOMContentLoaded", function() {
             }
 
             dataToSend.append(pair[0], value);
-            // dataToSend[pair[0]] = value;
         }
 
         // Deactivate form inputs
@@ -112,7 +111,8 @@ document.addEventListener("DOMContentLoaded", function() {
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4) {
                 if (xhr.status === 201) {
-                    showInfoModal("Success", "Element successfully created")
+                    showInfoModal("Success", "Element successfully created");
+                    e.target.reset();
                 } else {
                     showInfoModal("Error", xhr.statusText)
                 }
