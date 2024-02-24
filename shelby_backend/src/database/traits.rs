@@ -1,6 +1,6 @@
 use rusqlite::OptionalExtension;
 
-use super::{Database, Error, PrimaryKey, Record};
+use super::{Database, Error, PrimaryKey};
 
 pub trait Dependency {
     fn create_dependencies(database: &Database) -> Result<(), Error>;
@@ -49,6 +49,7 @@ pub trait DatabaseEntry: Sized {
     }
 }
 
+/// An database indexable through an single primary key.
 pub trait Indexable: DatabaseEntry {}
 
 /// An value insertable in the database.
@@ -74,23 +75,35 @@ pub trait Insertable: DatabaseEntry + Indexable + DefaultGenerator {
 }
 
 pub trait Selectable: DatabaseEntry + Indexable {
-    /// The statement for select WITH explicit primary key.
-    const STATEMENT_SELECT: &'static str;
-
-    /// The statement for selecting all entries.
-    const STATEMENT_SELECT_ALL: &'static str;
+    /// The public output. Other than the value itself, this value should be renderable in JSON without leaking sensible information.
+    type Output;
 
     /// The value which should be extracted from the row.
     type SelectValue<'a>: TryFrom<&'a rusqlite::Row<'a>, Error = rusqlite::Error>;
 
-    // The output when querying the entry.
-    //type Output: From<Self>;
+    /// The statement for selecting all entries.
+    const STATEMENT_SELECT_ALL: &'static str;
 
     /// Deserialize the database value into a Record.
-    fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> Record<Self>;
+    fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> Self::Output;
+
+    /// Select all the elements from the database.
+    fn select_all(database: &Database) -> Result<Vec<Self::Output>, Error> {
+        let mut stmt = database.connection.prepare(Self::STATEMENT_SELECT_ALL)?;
+        let iterator = stmt.query_map((), |row| {
+            Self::SelectValue::try_from(row).map(Self::deserialize_sql)
+        })?;
+
+        Ok(iterator.filter_map(|value| value.ok()).collect())
+    }
+}
+
+pub trait SelectableByPrimaryKey: Selectable + Indexable {
+    /// The statement for select WITH explicit primary key.
+    const STATEMENT_SELECT: &'static str;
 
     /// Select an element and parse it.
-    fn select(database: &Database, index: PrimaryKey<Self>) -> Result<Record<Self>, Error> {
+    fn select(database: &Database, index: PrimaryKey<Self>) -> Result<Self::Output, Error> {
         Ok(database
             .connection
             .query_row(Self::STATEMENT_SELECT, (index.0,), |row| {
@@ -99,23 +112,13 @@ pub trait Selectable: DatabaseEntry + Indexable {
     }
 
     /// Try to select a element which primary key was not validated.
-    fn try_select(database: &Database, index: i64) -> Result<Option<Record<Self>>, Error> {
+    fn try_select(database: &Database, index: i64) -> Result<Option<Self::Output>, Error> {
         Ok(database
             .connection
             .query_row(Self::STATEMENT_SELECT, (index,), |row| {
                 Self::SelectValue::try_from(row).map(Self::deserialize_sql)
             })
             .optional()?)
-    }
-
-    /// Select all the elements from the database.
-    fn select_all(database: &Database) -> Result<Vec<Record<Self>>, Error> {
-        let mut stmt = database.connection.prepare(Self::STATEMENT_SELECT_ALL)?;
-        let iterator = stmt.query_map((), |row| {
-            Self::SelectValue::try_from(row).map(Self::deserialize_sql)
-        })?;
-
-        Ok(iterator.filter_map(|value| value.ok()).collect())
     }
 }
 

@@ -37,7 +37,7 @@ pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
     const URL_ADD: &'static str;
 
     /// Translate a record into a row of strings.
-    fn generate_table_row(entry: Record<Self>) -> [String; N];
+    fn generate_table_row(entry: Self::Output) -> [String; N];
 
     /// Create a list for rendering all elements.
     fn prepare_rendering_all(

@@ -91,7 +91,9 @@ impl User {
 mod tests {
     use super::{PasswordHash, User};
     use crate::{
-        database::{Database, DatabaseEntry, DefaultGenerator, Insertable, Record, Selectable},
+        database::{
+            Database, DatabaseEntry, DefaultGenerator, Insertable, Record, SelectableByPrimaryKey,
+        },
         Date,
     };
 

@@ -23,8 +23,6 @@ macro_rules! make_struct {
                 );
             }
 
-            impl crate::database::Indexable for $name {}
-
             impl crate::database::Insertable for $name {
                 const STATEMENT_INSERT: &'static str = std::concat!(
                     "INSERT INTO ", $table_name, " (", concat_with::concat!(with ", ", $(stringify!($element)),*), ") VALUES (", concat_with::concat!(with ", ", $(crate::database::question_mark!($element)),*), ")"
@@ -37,9 +35,12 @@ macro_rules! make_struct {
                 }
             }
 
+            impl crate::database::Indexable for $name {}
+
             impl crate::database::Selectable for $name {
+                type Output = crate::database::Record<Self>;
+
                 const STATEMENT_SELECT_ALL: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name);
-                const STATEMENT_SELECT: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name, " WHERE id = ?");
 
                 type SelectValue<'a> = (i64, $( $ty ),*);
 
@@ -52,9 +53,34 @@ macro_rules! make_struct {
                 }
             }
 
+            impl crate::database::SelectableByPrimaryKey for $name {
+                const STATEMENT_SELECT: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name, " WHERE id = ?");
+
+                /// Select an element and parse it.
+                fn select(database: &crate::database::Database, index: PrimaryKey<Self>) -> Result<Self::Output, crate::database::Error> {
+                    Ok(database
+                        .connection
+                        .query_row(Self::STATEMENT_SELECT, (index.0,), |row| {
+                            Self::SelectValue::try_from(row).map(<Self as crate::database::Selectable>::deserialize_sql)
+                        })?)
+                }
+
+                /// Try to select a element which primary key was not validated.
+                fn try_select(database: &crate::database::Database, index: i64) -> Result<Option<Self::Output>, crate::database::Error> {
+                    use rusqlite::OptionalExtension;
+
+                    Ok(database
+                        .connection
+                        .query_row(Self::STATEMENT_SELECT, (index,), |row| {
+                            Self::SelectValue::try_from(row).map(<Self as crate::database::Selectable>::deserialize_sql)
+                        })
+                        .optional()?)
+                }
+            }
+
             #[cfg(test)]
             mod [< "test_" $table_name >] {
-                use crate::database::{DatabaseEntry, Selectable, Insertable, DefaultGenerator};
+                use crate::database::{DatabaseEntry, Selectable, Insertable, DefaultGenerator, SelectableByPrimaryKey};
                 use super::$name;
 
                 #[test]
@@ -123,7 +149,9 @@ pub(crate) use question_mark;
 
 #[cfg(test)]
 mod test {
-    use crate::database::{Database, DatabaseEntry, Insertable, PrimaryKey, Record, Selectable};
+    use crate::database::{
+        Database, DatabaseEntry, Insertable, PrimaryKey, Record, SelectableByPrimaryKey,
+    };
 
     crate::database::make_struct!(
         Test (Table with derived Default, serde::Serialize, serde::Deserialize: "tests") depends on () => {

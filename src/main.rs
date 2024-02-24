@@ -13,7 +13,7 @@ use auth::{login, logout, AuthenticatedUser};
 use rocket::data::{Limits, ToByteUnit};
 use rocket::{fs::NamedFile, serde::json::Json, State};
 use rocket_dyn_templates::{context, Template};
-use shelby_backend::database::{Database, DefaultGenerator, Insertable};
+use shelby_backend::database::{Database, DefaultGenerator, Insertable, SelectableByPrimaryKey};
 use std::path::PathBuf;
 
 pub use self::frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry};

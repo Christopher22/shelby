@@ -12,4 +12,5 @@ pub use self::record::Record;
 pub use self::sqlite::Database;
 pub use self::traits::{
     DatabaseEntry, DatabaseType, DefaultGenerator, Dependency, Indexable, Insertable, Selectable,
+    SelectableByPrimaryKey,
 };
