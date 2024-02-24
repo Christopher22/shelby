@@ -9,7 +9,10 @@ mod password_hash;
 pub use self::password_hash::PasswordHash;
 
 crate::database::make_struct!(
-    User (Table with derived Serialize: "users") depends on Person => {
+    #[derive(Serialize)]
+    #[table("users")]
+    #[dependencies(Person)]
+    User {
         username: String,
         password_hash: PasswordHash,
         active: bool,

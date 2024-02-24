@@ -6,7 +6,11 @@ macro_rules! question_mark {
 
 /// Create a indexable database entry.
 macro_rules! make_struct {
-    ($name: ident (Table $( with derived $( $derived: ty ),+ )?: $table_name: expr) depends on $dependencies: ty => { $( $(#[$os_attr: meta])? $element: ident: $ty: ty),* } $( ($additional_conditions: expr) )?) => {
+    ($(
+    #[derive($( $derived: ty ),+)] )?
+    #[table($table_name: expr)]
+    #[dependencies( $dependencies: ty )]
+    $name: ident { $( $(#[$os_attr: meta])? $element: ident: $ty: ty),* } $( ($additional_conditions: expr) )?) => {
         paste::paste! {
             #[derive(Debug, Clone, PartialEq, Eq)]
             $(#[derive($( $derived ),+)])?
@@ -154,7 +158,10 @@ mod test {
     };
 
     crate::database::make_struct!(
-        Test (Table with derived Default, serde::Serialize, serde::Deserialize: "tests") depends on () => {
+        #[derive(Default, serde::Serialize, serde::Deserialize)]
+        #[table("tests")]
+        #[dependencies(())]
+        Test {
             bool_value: bool,
             string_value: String,
             integer_value: u32
@@ -163,7 +170,10 @@ mod test {
 
     // We need to check values with single elements are properly serialized, too.
     crate::database::make_struct!(
-        TestSingleElement (Table with derived Default: "tests_single") depends on () => {
+        #[derive(Default)]
+        #[table("tests_single")]
+        #[dependencies(())]
+        TestSingleElement {
             string_value: String
         }
     );

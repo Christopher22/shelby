@@ -2,7 +2,10 @@ use crate::database::{Database, DatabaseEntry, Error, PrimaryKey};
 use crate::Date;
 
 crate::database::make_struct!(
-    Person (Table with derived Default, serde::Serialize, serde::Deserialize: "persons") depends on () => {
+    #[derive(Default, serde::Serialize, serde::Deserialize)]
+    #[table("persons")]
+    #[dependencies(())]
+    Person {
         name: String,
         address: String,
         email: Option<String>,
@@ -12,7 +15,10 @@ crate::database::make_struct!(
 );
 
 crate::database::make_struct!(
-    Group (Table with derived Default, serde::Serialize, serde::Deserialize: "groups") depends on () => {
+    #[derive(Default, serde::Serialize, serde::Deserialize)]
+    #[table("groups")]
+    #[dependencies(())]
+    Group {
         description: String
     }
 );

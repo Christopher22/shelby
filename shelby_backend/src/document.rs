@@ -2,7 +2,10 @@ use crate::database::{DefaultGenerator, Insertable, PrimaryKey};
 use crate::{person::Person, user::User, Date};
 
 crate::database::make_struct!(
-    Document (Table with derived serde::Serialize, serde::Deserialize: "documents") depends on (Person, User)  => {
+    #[derive(serde::Serialize, serde::Deserialize)]
+    #[table("documents")]
+    #[dependencies((Person, User))]
+    Document {
         document: Vec<u8>,
         processed_by: PrimaryKey<User>,
         from_person: PrimaryKey<Person>,
