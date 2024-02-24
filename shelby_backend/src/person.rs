@@ -90,7 +90,7 @@ impl Membership {
 
 #[cfg(test)]
 mod membership_tests {
-    use crate::database::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey};
+    use crate::database::{Database, DatabaseEntry, Insertable, PrimaryKey};
 
     use super::{Group, Membership, Person};
 

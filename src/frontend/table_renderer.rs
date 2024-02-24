@@ -1,6 +1,6 @@
 use rocket::serde::Serialize;
 use rocket_dyn_templates::context;
-use shelby_backend::database::{Database, IndexableDatebaseEntry, Record};
+use shelby_backend::database::{Database, Record, Selectable};
 
 use super::Renderable;
 
@@ -26,7 +26,7 @@ where
     }
 }
 
-pub trait RenderableDatabaseEntry<const N: usize>: IndexableDatebaseEntry {
+pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
     /// The title of the entry
     const TITLE: &'static str;
 

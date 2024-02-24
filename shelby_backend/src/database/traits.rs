@@ -49,14 +49,10 @@ pub trait DatabaseEntry: Sized {
     }
 }
 
+pub trait Indexable: DatabaseEntry {}
+
 /// An value insertable in the database.
-pub trait IndexableDatebaseEntry: DefaultGenerator {
-    /// The statement for select WITH explicit primary key.
-    const STATEMENT_SELECT: &'static str;
-
-    /// The statement for selecting all entries.
-    const STATEMENT_SELECT_ALL: &'static str;
-
+pub trait Insertable: DatabaseEntry + Indexable + DefaultGenerator {
     /// The statement for insert the InsertValue WITHOUT explicit primary key.
     const STATEMENT_INSERT: &'static str;
 
@@ -65,11 +61,30 @@ pub trait IndexableDatebaseEntry: DefaultGenerator {
     where
         Self: 'a;
 
+    /// Convert the value as the insert values.
+    fn serialize_sql<'a>(&'a self) -> Self::InsertValue<'a>;
+
+    /// Insert the value with a given primary key.
+    fn insert(&self, database: &Database) -> Result<PrimaryKey<Self>, Error> {
+        Ok(database
+            .connection
+            .execute(Self::STATEMENT_INSERT, self.serialize_sql())
+            .map(|_| PrimaryKey::from(database.connection.last_insert_rowid()))?)
+    }
+}
+
+pub trait Selectable: DatabaseEntry + Indexable {
+    /// The statement for select WITH explicit primary key.
+    const STATEMENT_SELECT: &'static str;
+
+    /// The statement for selecting all entries.
+    const STATEMENT_SELECT_ALL: &'static str;
+
     /// The value which should be extracted from the row.
     type SelectValue<'a>: TryFrom<&'a rusqlite::Row<'a>, Error = rusqlite::Error>;
 
-    /// Convert the value as the insert values.
-    fn serialize_sql<'a>(&'a self) -> Self::InsertValue<'a>;
+    // The output when querying the entry.
+    //type Output: From<Self>;
 
     /// Deserialize the database value into a Record.
     fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> Record<Self>;
@@ -102,18 +117,10 @@ pub trait IndexableDatebaseEntry: DefaultGenerator {
 
         Ok(iterator.filter_map(|value| value.ok()).collect())
     }
-
-    /// Insert the value with a given primary key.
-    fn insert(&self, database: &Database) -> Result<PrimaryKey<Self>, Error> {
-        Ok(database
-            .connection
-            .execute(Self::STATEMENT_INSERT, self.serialize_sql())
-            .map(|_| PrimaryKey::from(database.connection.last_insert_rowid()))?)
-    }
 }
 
 /// An trait for creating a default for objects with complex constraints like foreign keys requiering database access.
-pub trait DefaultGenerator: DatabaseEntry {
+pub trait DefaultGenerator {
     /// Create the default element.
     fn create_default(database: &Database) -> Self;
 }
@@ -148,7 +155,7 @@ create_database_type!(String => "TEXT");
 create_database_type!(crate::Date => "DATETIME");
 create_database_type!(Vec<u8> => "BLOB");
 
-impl<T: crate::database::IndexableDatebaseEntry> DatabaseType for crate::database::PrimaryKey<T> {
+impl<T: crate::database::Indexable> DatabaseType for crate::database::PrimaryKey<T> {
     const RAW_COLUMN_VALUE: &'static str = "INTEGER";
     const COLUMN_VALUE: &'static str = "INTEGER NOT NULL";
 }

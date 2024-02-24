@@ -1,9 +1,7 @@
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
-use crate::database::{
-    Database, DatabaseEntry, DefaultGenerator, IndexableDatebaseEntry, PrimaryKey, Record,
-};
+use crate::database::{Database, DatabaseEntry, DefaultGenerator, PrimaryKey, Record, Selectable};
 use crate::person::Person;
 use crate::Date;
 
@@ -83,8 +81,7 @@ impl User {
         Ok(database
             .connection
             .query_row(SELECT_BY_NAME_QUERY, (name.as_ref(),), |row| {
-                <Self as IndexableDatebaseEntry>::SelectValue::try_from(row)
-                    .map(Self::deserialize_sql)
+                <Self as Selectable>::SelectValue::try_from(row).map(Self::deserialize_sql)
             })
             .optional()?)
     }
@@ -94,7 +91,7 @@ impl User {
 mod tests {
     use super::{PasswordHash, User};
     use crate::{
-        database::{Database, DatabaseEntry, DefaultGenerator, IndexableDatebaseEntry, Record},
+        database::{Database, DatabaseEntry, DefaultGenerator, Insertable, Record, Selectable},
         Date,
     };
 

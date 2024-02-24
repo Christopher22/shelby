@@ -11,5 +11,5 @@ pub use self::primary_key::{ParseError as PrimaryKeyParseError, PrimaryKey};
 pub use self::record::Record;
 pub use self::sqlite::Database;
 pub use self::traits::{
-    DatabaseEntry, DatabaseType, DefaultGenerator, Dependency, IndexableDatebaseEntry,
+    DatabaseEntry, DatabaseType, DefaultGenerator, Dependency, Indexable, Insertable, Selectable,
 };

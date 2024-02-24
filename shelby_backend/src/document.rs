@@ -1,4 +1,4 @@
-use crate::database::{DefaultGenerator, IndexableDatebaseEntry, PrimaryKey};
+use crate::database::{DefaultGenerator, Insertable, PrimaryKey};
 use crate::{person::Person, user::User, Date};
 
 crate::database::make_struct!(
@@ -35,7 +35,7 @@ impl DefaultGenerator for Document {
 #[cfg(test)]
 mod tests {
     use super::Document;
-    use crate::database::{DefaultGenerator, IndexableDatebaseEntry};
+    use crate::database::{DefaultGenerator, Insertable};
 
     #[test]
     fn test_availability_in_default_migrations() {

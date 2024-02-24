@@ -23,19 +23,25 @@ macro_rules! make_struct {
                 );
             }
 
-            impl crate::database::IndexableDatebaseEntry for $name {
+            impl crate::database::Indexable for $name {}
+
+            impl crate::database::Insertable for $name {
                 const STATEMENT_INSERT: &'static str = std::concat!(
                     "INSERT INTO ", $table_name, " (", concat_with::concat!(with ", ", $(stringify!($element)),*), ") VALUES (", concat_with::concat!(with ", ", $(crate::database::question_mark!($element)),*), ")"
                 );
-                const STATEMENT_SELECT_ALL: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name);
-                const STATEMENT_SELECT: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name, " WHERE id = ?");
 
                 type InsertValue<'a> = ($( &'a $ty ),*, );
-                type SelectValue<'a> = (i64, $( $ty ),*);
 
                 fn serialize_sql<'a>(&'a self) -> Self::InsertValue<'a> {
                     ($( &self.$element ),* ,)
                 }
+            }
+
+            impl crate::database::Selectable for $name {
+                const STATEMENT_SELECT_ALL: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name);
+                const STATEMENT_SELECT: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name, " WHERE id = ?");
+
+                type SelectValue<'a> = (i64, $( $ty ),*);
 
                 fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> crate::database::Record<Self> {
                     let (primary_key, $( $element ),*) = value;
@@ -48,7 +54,7 @@ macro_rules! make_struct {
 
             #[cfg(test)]
             mod [< "test_" $table_name >] {
-                use crate::database::{DatabaseEntry, IndexableDatebaseEntry, DefaultGenerator};
+                use crate::database::{DatabaseEntry, Selectable, Insertable, DefaultGenerator};
                 use super::$name;
 
                 #[test]
@@ -117,7 +123,7 @@ pub(crate) use question_mark;
 
 #[cfg(test)]
 mod test {
-    use crate::database::{Database, DatabaseEntry, IndexableDatebaseEntry, PrimaryKey, Record};
+    use crate::database::{Database, DatabaseEntry, Insertable, PrimaryKey, Record, Selectable};
 
     crate::database::make_struct!(
         Test (Table with derived Default, serde::Serialize, serde::Deserialize: "tests") depends on () => {

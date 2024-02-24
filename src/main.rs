@@ -13,7 +13,7 @@ use auth::{login, logout, AuthenticatedUser};
 use rocket::data::{Limits, ToByteUnit};
 use rocket::{fs::NamedFile, serde::json::Json, State};
 use rocket_dyn_templates::{context, Template};
-use shelby_backend::database::{Database, DefaultGenerator, IndexableDatebaseEntry};
+use shelby_backend::database::{Database, DefaultGenerator, Insertable};
 use std::path::PathBuf;
 
 pub use self::frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry};
@@ -30,7 +30,7 @@ macro_rules! create_routes {
         mod $function_name {
             use rocket::{response::status, serde::json::Json, State};
             use rocket_dyn_templates::Template;
-            use shelby_backend::database::{IndexableDatebaseEntry, Record};
+            use shelby_backend::database::{Insertable, Record, Selectable};
 
             use crate::{
                 auth::AuthenticatedUser,
@@ -52,6 +52,11 @@ macro_rules! create_routes {
                     .insert(&state.database())
                     .map(|primary_key| status::Created::new(primary_key.to_string()))
                     .map_err(Error::from)
+            }
+
+            #[get($path_add, rank = 2)]
+            pub fn add_frontend(user: AuthenticatedUser) -> Template {
+                DatabaseEntry::prepare_rendering($path, user).render()
             }
 
             #[get($path, rank = 3)]
@@ -81,17 +86,12 @@ macro_rules! create_routes {
                 }
             }
 
-            #[get($path_add, rank = 2)]
-            pub fn add_frontend(user: AuthenticatedUser) -> Template {
-                DatabaseEntry::prepare_rendering($path, user).render()
-            }
-
             #[cfg(test)]
             mod tests {
                 use crate::frontend::RenderableDatabaseEntry;
                 use crate::{rocket, Config};
                 use rocket::{http::Status, local::blocking::Client, serde::json, State};
-                use shelby_backend::database::{DefaultGenerator, IndexableDatebaseEntry, Record};
+                use shelby_backend::database::{DefaultGenerator, Record, Selectable};
 
                 use super::DatabaseEntry as TargetEntity;
                 const ACCESS_POINT: &'static str = $path;
@@ -392,7 +392,7 @@ mod tests {
     use super::{auth, rocket, Config};
     use rocket::{http::ContentType, local::blocking::Client, State};
     use rocket_dyn_templates::context;
-    use shelby_backend::database::{DefaultGenerator, IndexableDatebaseEntry};
+    use shelby_backend::database::{DefaultGenerator, Insertable};
 
     fn add_user<P: rocket::Phase>(
         engine: rocket::Rocket<P>,

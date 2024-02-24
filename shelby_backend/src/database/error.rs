@@ -33,7 +33,7 @@ impl std::error::Error for Error {}
 #[cfg(test)]
 mod tests {
     use crate::{
-        database::{Database, IndexableDatebaseEntry, PrimaryKey},
+        database::{Database, Insertable, PrimaryKey},
         user::{PasswordHash, User},
     };
 

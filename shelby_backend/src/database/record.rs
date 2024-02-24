@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use super::{IndexableDatebaseEntry, PrimaryKey};
+use super::{Indexable, PrimaryKey};
 
 /// A record with associated, numerical primary key.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Record<T>
 where
-    T: IndexableDatebaseEntry,
+    T: Indexable,
 {
     pub identifier: PrimaryKey<T>,
     #[serde(flatten)]
@@ -15,7 +15,7 @@ where
 
 impl<T> std::ops::Deref for Record<T>
 where
-    T: IndexableDatebaseEntry,
+    T: Indexable,
 {
     type Target = T;
 

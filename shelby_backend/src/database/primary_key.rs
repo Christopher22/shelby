@@ -1,21 +1,18 @@
 use std::str::FromStr;
 
-use super::IndexableDatebaseEntry;
+use super::Indexable;
 
 /// The primary key of a record.
 #[derive(Debug, PartialEq, Eq)]
-pub struct PrimaryKey<T: IndexableDatebaseEntry>(
-    pub(crate) i64,
-    std::marker::PhantomData<*const T>,
-);
+pub struct PrimaryKey<T: Indexable>(pub(crate) i64, std::marker::PhantomData<*const T>);
 
-unsafe impl<T: IndexableDatebaseEntry> std::marker::Send for PrimaryKey<T> {}
-unsafe impl<T: IndexableDatebaseEntry> std::marker::Sync for PrimaryKey<T> {}
+unsafe impl<T: Indexable> std::marker::Send for PrimaryKey<T> {}
+unsafe impl<T: Indexable> std::marker::Sync for PrimaryKey<T> {}
 
 #[derive(Default)]
-struct PrimaryKeyVisitor<T: IndexableDatebaseEntry>(std::marker::PhantomData<*const T>);
+struct PrimaryKeyVisitor<T: Indexable>(std::marker::PhantomData<*const T>);
 
-impl<'de, T: IndexableDatebaseEntry> serde::de::Visitor<'de> for PrimaryKeyVisitor<T> {
+impl<'de, T: Indexable> serde::de::Visitor<'de> for PrimaryKeyVisitor<T> {
     type Value = PrimaryKey<T>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -41,7 +38,7 @@ impl<'de, T: IndexableDatebaseEntry> serde::de::Visitor<'de> for PrimaryKeyVisit
     }
 }
 
-impl<'de, T: IndexableDatebaseEntry> serde::Deserialize<'de> for PrimaryKey<T> {
+impl<'de, T: Indexable> serde::Deserialize<'de> for PrimaryKey<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -50,7 +47,7 @@ impl<'de, T: IndexableDatebaseEntry> serde::Deserialize<'de> for PrimaryKey<T> {
     }
 }
 
-impl<T: IndexableDatebaseEntry> serde::Serialize for PrimaryKey<T> {
+impl<T: Indexable> serde::Serialize for PrimaryKey<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -59,39 +56,39 @@ impl<T: IndexableDatebaseEntry> serde::Serialize for PrimaryKey<T> {
     }
 }
 
-impl<T: IndexableDatebaseEntry> std::fmt::Display for PrimaryKey<T> {
+impl<T: Indexable> std::fmt::Display for PrimaryKey<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "/{}/{}", T::TABLE_NAME, self.0)
     }
 }
 
-impl<T: IndexableDatebaseEntry> Clone for PrimaryKey<T> {
+impl<T: Indexable> Clone for PrimaryKey<T> {
     fn clone(&self) -> Self {
         Self(self.0, std::marker::PhantomData)
     }
 }
 
-impl<T: IndexableDatebaseEntry> Copy for PrimaryKey<T> {}
+impl<T: Indexable> Copy for PrimaryKey<T> {}
 
-impl<T: IndexableDatebaseEntry> From<i64> for PrimaryKey<T> {
+impl<T: Indexable> From<i64> for PrimaryKey<T> {
     fn from(value: i64) -> Self {
         Self(value, std::marker::PhantomData)
     }
 }
 
-impl<T: IndexableDatebaseEntry> rusqlite::ToSql for PrimaryKey<T> {
+impl<T: Indexable> rusqlite::ToSql for PrimaryKey<T> {
     fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         Ok(rusqlite::types::ToSqlOutput::Owned(self.0.into()))
     }
 }
 
-impl<T: IndexableDatebaseEntry> rusqlite::types::FromSql for PrimaryKey<T> {
+impl<T: Indexable> rusqlite::types::FromSql for PrimaryKey<T> {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         i64::column_result(value).map(PrimaryKey::from)
     }
 }
 
-impl<T: IndexableDatebaseEntry> std::str::FromStr for PrimaryKey<T> {
+impl<T: Indexable> std::str::FromStr for PrimaryKey<T> {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -172,7 +169,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_invalid_string() {
-        let deserialized: Result<PrimaryKey<Person>, _> = serde_json::from_str(r#""/persons/123""#);
+        let deserialized: Result<PrimaryKey<Person>, _> =
+            serde_json::from_str(r#""/wrong_table/123""#);
         assert!(deserialized.is_err());
     }
 }
