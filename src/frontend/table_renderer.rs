@@ -1,6 +1,11 @@
 use rocket::serde::Serialize;
 use rocket_dyn_templates::context;
-use shelby_backend::database::{Database, Record, Selectable};
+use shelby_backend::{
+    database::{Database, Record, Selectable},
+    document::Document,
+    person::{Group, Person},
+    user::User,
+};
 
 use super::Renderable;
 
@@ -53,7 +58,7 @@ pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
     }
 }
 
-impl RenderableDatabaseEntry<3> for shelby_backend::person::Person {
+impl RenderableDatabaseEntry<3> for Person {
     const TITLE: &'static str = "Contacts";
     const COLUMNS: [&'static str; 3] = ["Name", "Address", "E-Mail"];
     const URL_ADD: &'static str = "/persons/new";
@@ -64,7 +69,7 @@ impl RenderableDatabaseEntry<3> for shelby_backend::person::Person {
     }
 }
 
-impl RenderableDatabaseEntry<2> for shelby_backend::person::Group {
+impl RenderableDatabaseEntry<2> for Group {
     const TITLE: &'static str = "Groups";
     const COLUMNS: [&'static str; 2] = ["Group", "Description"];
     const URL_ADD: &'static str = "/groups/new";
@@ -74,27 +79,27 @@ impl RenderableDatabaseEntry<2> for shelby_backend::person::Group {
     }
 }
 
-impl RenderableDatabaseEntry<4> for shelby_backend::document::Document {
+impl RenderableDatabaseEntry<4> for Document {
     const TITLE: &'static str = "Documents";
     const COLUMNS: [&'static str; 4] = ["Name", "From", "To", "Description"];
     const URL_ADD: &'static str = "/documents/new";
 
-    fn generate_table_row(document: Record<Self>) -> [String; 4] {
+    fn generate_table_row(document: <Document as Selectable>::Output) -> [String; 4] {
         [
             document.identifier.to_string(),
             document.from_person.to_string(),
             document.to_person.to_string(),
-            document.value.description.unwrap_or_default(),
+            document.description.unwrap_or_default(),
         ]
     }
 }
 
-impl RenderableDatabaseEntry<4> for shelby_backend::user::User {
+impl RenderableDatabaseEntry<4> for User {
     const TITLE: &'static str = "Users";
     const COLUMNS: [&'static str; 4] = ["Identifier", "Name", "Creation date", "Used by"];
     const URL_ADD: &'static str = "/users/new";
 
-    fn generate_table_row(user: Record<Self>) -> [String; 4] {
+    fn generate_table_row(user: <User as Selectable>::Output) -> [String; 4] {
         [
             user.identifier.to_string(),
             user.username.to_string(),

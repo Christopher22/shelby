@@ -1,7 +1,7 @@
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
-use crate::database::{Database, DatabaseEntry, DefaultGenerator, PrimaryKey, Record, Selectable};
+use crate::database::{Database, DatabaseEntry, DefaultGenerator, PrimaryKey, Record};
 use crate::person::Person;
 use crate::Date;
 
@@ -12,6 +12,7 @@ crate::database::make_struct!(
     #[derive(Serialize)]
     #[table("users")]
     #[dependencies(Person)]
+    #[impl_select(false, testing: true)]
     User {
         username: String,
         password_hash: PasswordHash,
@@ -20,6 +21,41 @@ crate::database::make_struct!(
         related_to: Option<PrimaryKey<Person>>
     } ("FOREIGN KEY(related_to) REFERENCES persons(id)")
 );
+
+impl User {
+    /// Select a user by its name.
+    pub fn select_by_name(
+        database: &Database,
+        name: impl AsRef<str>,
+    ) -> Result<Option<Record<Self>>, crate::database::Error> {
+        const SELECT_BY_NAME_QUERY: &'static str =
+            const_format::formatcp!("SELECT * FROM {} WHERE username = ?", User::TABLE_NAME);
+
+        Ok(database
+            .connection
+            .query_row(SELECT_BY_NAME_QUERY, (name.as_ref(),), |row| {
+                <(
+                    PrimaryKey<User>,
+                    String,
+                    PasswordHash,
+                    bool,
+                    Date,
+                    Option<PrimaryKey<Person>>,
+                )>::try_from(row)
+                .map(|value| Record {
+                    identifier: value.0,
+                    value: User {
+                        username: value.1,
+                        password_hash: value.2,
+                        active: value.3,
+                        creation_date: value.4,
+                        related_to: value.5,
+                    },
+                })
+            })
+            .optional()?)
+    }
+}
 
 impl DefaultGenerator for User {
     fn create_default(_: &Database) -> Self {
@@ -31,6 +67,44 @@ impl DefaultGenerator for User {
             related_to: None,
         }
     }
+}
+
+impl crate::database::Selectable for User {
+    /// The public output. Other than the value itself, this value should be renderable in JSON without leaking sensible information.
+    type Output = Metadata;
+
+    /// The value which should be extracted from the row.
+    type SelectValue<'a> = (
+        PrimaryKey<User>,
+        String,
+        bool,
+        Date,
+        Option<PrimaryKey<Person>>,
+    );
+
+    /// The statement for selecting all entries.
+    const STATEMENT_SELECT_ALL: &'static str = const_format::formatcp!(
+        "SELECT id, username, active, creation_date, related_to FROM {}",
+        User::TABLE_NAME
+    );
+
+    /// Deserialize the database value into a Record.
+    fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> Self::Output {
+        Metadata {
+            identifier: value.0,
+            username: value.1,
+            active: value.2,
+            creation_date: value.3,
+            related_to: value.4,
+        }
+    }
+}
+
+impl crate::database::SelectableByPrimaryKey for User {
+    const STATEMENT_SELECT: &'static str = const_format::concatcp!(
+        <User as crate::database::Selectable>::STATEMENT_SELECT_ALL,
+        " WHERE id = ?"
+    );
 }
 
 /// The serialization and serialization of this class is special. The password hash can be deserialized, derived from a raw password, or even skipped and than replaced by an invalid password hash.
@@ -72,21 +146,26 @@ impl<'de> Deserialize<'de> for User {
     }
 }
 
-impl User {
-    /// Select a user by its name.
-    pub fn select_by_name(
-        database: &Database,
-        name: impl AsRef<str>,
-    ) -> Result<Option<Record<Self>>, crate::database::Error> {
-        const SELECT_BY_NAME_QUERY: &'static str =
-            const_format::formatcp!("SELECT * FROM {} WHERE username = ?", User::TABLE_NAME);
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Metadata {
+    pub identifier: PrimaryKey<User>,
+    pub username: String,
+    pub active: bool,
+    pub creation_date: Date,
+    pub related_to: Option<PrimaryKey<Person>>,
+}
 
-        Ok(database
-            .connection
-            .query_row(SELECT_BY_NAME_QUERY, (name.as_ref(),), |row| {
-                <Self as Selectable>::SelectValue::try_from(row).map(Self::deserialize_sql)
-            })
-            .optional()?)
+impl From<Record<User>> for Metadata {
+    fn from(value: Record<User>) -> Self {
+        let identifier = value.identifier;
+        let value: User = value.value;
+        Metadata {
+            identifier,
+            username: value.username,
+            active: value.active,
+            creation_date: value.creation_date,
+            related_to: value.related_to,
+        }
     }
 }
 
@@ -94,9 +173,7 @@ impl User {
 mod tests {
     use super::{PasswordHash, User};
     use crate::{
-        database::{
-            Database, DatabaseEntry, DefaultGenerator, Insertable, Record, SelectableByPrimaryKey,
-        },
+        database::{Database, DatabaseEntry, DefaultGenerator, Insertable, Record},
         Date,
     };
 
@@ -122,7 +199,7 @@ mod tests {
         let database = Database::plain().expect("valid database");
         User::create_table(&database).expect("valid table");
 
-        let index = User {
+        let _ = User {
             username: String::from(username),
             password_hash: PasswordHash::new(username, "test1234"),
             active: true,
@@ -132,7 +209,9 @@ mod tests {
         .insert(&database)
         .expect("Insert sucessful");
 
-        let user = User::select(&database, index).expect("valid sample");
+        let user = User::select_by_name(&database, username)
+            .expect("valid sample")
+            .expect("existing value");
         assert_eq!(user.password_hash.matches(username, "test123"), false);
         assert_eq!(user.password_hash.matches(username, "test1234"), true);
     }

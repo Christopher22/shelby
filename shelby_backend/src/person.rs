@@ -5,6 +5,7 @@ crate::database::make_struct!(
     #[derive(Default, serde::Serialize, serde::Deserialize)]
     #[table("persons")]
     #[dependencies(())]
+    #[impl_select(true, testing: true)]
     Person {
         name: String,
         address: String,
@@ -18,6 +19,7 @@ crate::database::make_struct!(
     #[derive(Default, serde::Serialize, serde::Deserialize)]
     #[table("groups")]
     #[dependencies(())]
+    #[impl_select(true, testing: true)]
     Group {
         description: String
     }

@@ -1,6 +1,6 @@
 use rusqlite::OptionalExtension;
 
-use super::{Database, Error, PrimaryKey};
+use super::{Database, Error, PrimaryKey, Record};
 
 pub trait Dependency {
     fn create_dependencies(database: &Database) -> Result<(), Error>;
@@ -72,11 +72,19 @@ pub trait Insertable: DatabaseEntry + Indexable + DefaultGenerator {
             .execute(Self::STATEMENT_INSERT, self.serialize_sql())
             .map(|_| PrimaryKey::from(database.connection.last_insert_rowid()))?)
     }
+
+    /// Insert the value with a given primary key. A convenience function to get the record after the insertion.
+    fn insert_record(self, database: &Database) -> Result<Record<Self>, Error> {
+        Self::insert(&self, database).map(|identifier| Record {
+            identifier,
+            value: self,
+        })
+    }
 }
 
 pub trait Selectable: DatabaseEntry + Indexable {
     /// The public output. Other than the value itself, this value should be renderable in JSON without leaking sensible information.
-    type Output;
+    type Output: From<Record<Self>>;
 
     /// The value which should be extracted from the row.
     type SelectValue<'a>: TryFrom<&'a rusqlite::Row<'a>, Error = rusqlite::Error>;

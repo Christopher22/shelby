@@ -30,7 +30,7 @@ macro_rules! create_routes {
         mod $function_name {
             use rocket::{response::status, serde::json::Json, State};
             use rocket_dyn_templates::Template;
-            use shelby_backend::database::{Insertable, Record, Selectable};
+            use shelby_backend::database::{Insertable, Selectable};
 
             use crate::{
                 auth::AuthenticatedUser,
@@ -64,7 +64,8 @@ macro_rules! create_routes {
                 _user: AuthenticatedUser,
                 state: &State<Config>,
                 content_type: Option<&rocket::http::ContentType>,
-            ) -> Result<Result<Template, Json<Vec<Record<DatabaseEntry>>>>, Error> {
+            ) -> Result<Result<Template, Json<Vec<<DatabaseEntry as Selectable>::Output>>>, Error>
+            {
                 let database = &state.database();
                 Ok(match content_type {
                     Some(value) if value.0.is_json() => {
@@ -79,7 +80,7 @@ macro_rules! create_routes {
                 _user: AuthenticatedUser,
                 id: i64,
                 state: &State<Config>,
-            ) -> Result<Json<Record<DatabaseEntry>>, Error> {
+            ) -> Result<Json<<DatabaseEntry as Selectable>::Output>, Error> {
                 match DatabaseEntry::try_select(&state.database(), id)? {
                     Some(value) => Ok(Json(value)),
                     None => Err(Error::NotFound),
@@ -91,7 +92,7 @@ macro_rules! create_routes {
                 use crate::frontend::RenderableDatabaseEntry;
                 use crate::{rocket, Config};
                 use rocket::{http::Status, local::blocking::Client, serde::json, State};
-                use shelby_backend::database::{DefaultGenerator, Record, Selectable};
+                use shelby_backend::database::{DefaultGenerator, PrimaryKey, Record, Selectable};
 
                 use super::DatabaseEntry as TargetEntity;
                 const ACCESS_POINT: &'static str = $path;
@@ -190,7 +191,7 @@ macro_rules! create_routes {
                     // Why does this fail?
                     // let response_json: Vec<Record<TargetEntity>> = response.into_json().expect("valid json");
                     let response = response.into_string().expect("valid str");
-                    let response_json: Vec<Record<TargetEntity>> =
+                    let response_json: Vec<<TargetEntity as Selectable>::Output> =
                         json::from_str(&response).expect("valid json");
                     assert_eq!(response_json.len(), num_elements + 1);
                 }
@@ -207,6 +208,7 @@ macro_rules! create_routes {
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
                     assert_eq!(creation_response.status(), Status::Created);
 
+                    // Extract the primary key
                     let primary_key_path = creation_response
                         .headers()
                         .get_one("Location")
@@ -214,10 +216,21 @@ macro_rules! create_routes {
                     let response = client.get(primary_key_path).dispatch();
                     assert_eq!(response.status(), Status::Ok);
 
+                    // Parse the Json response
                     let response = response.into_string().expect("valid str");
-                    let response_json: Record<TargetEntity> =
+                    let response_json: <TargetEntity as Selectable>::Output =
                         json::from_str(&response).expect("valid json");
-                    assert_eq!(*response_json, example);
+
+                    assert_eq!(
+                        response_json,
+                        <TargetEntity as Selectable>::Output::from(Record {
+                            identifier: <PrimaryKey<_> as std::str::FromStr>::from_str(
+                                primary_key_path
+                            )
+                            .expect("valid key"),
+                            value: example
+                        })
+                    );
                 }
 
                 #[test]
@@ -298,7 +311,6 @@ create_routes!(shelby_backend::document::Document {
     post: "/documents/new"
 });
 
-// ToDo: Currently, the hashed password is accessible for admins. Should we fix that?
 create_routes!(shelby_backend::user::User {
     module: user,
     url: "/users",

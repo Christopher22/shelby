@@ -9,32 +9,10 @@ pub struct PrimaryKey<T: Indexable>(pub(crate) i64, std::marker::PhantomData<*co
 unsafe impl<T: Indexable> std::marker::Send for PrimaryKey<T> {}
 unsafe impl<T: Indexable> std::marker::Sync for PrimaryKey<T> {}
 
-#[derive(Default)]
-struct PrimaryKeyVisitor<T: Indexable>(std::marker::PhantomData<*const T>);
-
-impl<'de, T: Indexable> serde::de::Visitor<'de> for PrimaryKeyVisitor<T> {
-    type Value = PrimaryKey<T>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            formatter,
-            "a path in the form of '/{}/(<number>' or a u64",
-            T::TABLE_NAME
-        )
-    }
-
-    fn visit_i64<E>(self, primary_key: i64) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        Ok(PrimaryKey::from(primary_key))
-    }
-
-    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        PrimaryKey::from_str(v).map_err(|error| E::custom(error.to_string()))
+impl<T: Indexable> PrimaryKey<T> {
+    /// Extract the raw index. Just deriving From does not work.
+    pub fn raw_index(&self) -> i64 {
+        self.0
     }
 }
 
@@ -129,6 +107,35 @@ impl std::fmt::Display for ParseError {
 }
 
 impl std::error::Error for ParseError {}
+
+#[derive(Default)]
+struct PrimaryKeyVisitor<T: Indexable>(std::marker::PhantomData<*const T>);
+
+impl<'de, T: Indexable> serde::de::Visitor<'de> for PrimaryKeyVisitor<T> {
+    type Value = PrimaryKey<T>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            formatter,
+            "a path in the form of '/{}/(<number>' or a u64",
+            T::TABLE_NAME
+        )
+    }
+
+    fn visit_i64<E>(self, primary_key: i64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(PrimaryKey::from(primary_key))
+    }
+
+    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        PrimaryKey::from_str(v).map_err(|error| E::custom(error.to_string()))
+    }
+}
 
 #[cfg(test)]
 mod tests {

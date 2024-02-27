@@ -1,10 +1,13 @@
-use crate::database::{DefaultGenerator, Insertable, PrimaryKey};
+use serde::{Deserialize, Serialize};
+
+use crate::database::{DefaultGenerator, Insertable, PrimaryKey, Record};
 use crate::{person::Person, user::User, Date};
 
 crate::database::make_struct!(
     #[derive(serde::Serialize, serde::Deserialize)]
     #[table("documents")]
     #[dependencies((Person, User))]
+    #[impl_select(false, testing: true)]
     Document {
         document: Vec<u8>,
         processed_by: PrimaryKey<User>,
@@ -15,6 +18,45 @@ crate::database::make_struct!(
         description: Option<String>
     } ("FOREIGN KEY(processed_by) REFERENCES users(id), FOREIGN KEY(from_person) REFERENCES persons(id), FOREIGN KEY(to_person) REFERENCES persons(id)")
 );
+
+impl crate::database::Selectable for Document {
+    /// The public output. Other than the value itself, this value should be renderable in JSON without leaking sensible information.
+    type Output = Metadata;
+
+    /// The value which should be extracted from the row.
+    type SelectValue<'a> = (
+        PrimaryKey<Document>,
+        PrimaryKey<User>,
+        PrimaryKey<Person>,
+        PrimaryKey<Person>,
+        Date,
+        Date,
+        Option<String>,
+    );
+
+    /// The statement for selecting all entries.
+    const STATEMENT_SELECT_ALL: &'static str = "SELECT id, processed_by, from_person, to_person, recieved, processed, description FROM documents";
+
+    /// Deserialize the database value into a Record.
+    fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> Self::Output {
+        Metadata {
+            identifier: value.0,
+            processed_by: value.1,
+            from_person: value.2,
+            to_person: value.3,
+            recieved: value.4,
+            processed: value.5,
+            description: value.6,
+        }
+    }
+}
+
+impl crate::database::SelectableByPrimaryKey for Document {
+    const STATEMENT_SELECT: &'static str = const_format::concatcp!(
+        <Document as crate::database::Selectable>::STATEMENT_SELECT_ALL,
+        " WHERE id = ?"
+    );
+}
 
 impl DefaultGenerator for Document {
     fn create_default(database: &crate::database::Database) -> Self {
@@ -31,6 +73,34 @@ impl DefaultGenerator for Document {
             recieved: Date::today(),
             processed: Date::today(),
             description: None,
+        }
+    }
+}
+
+/// The metadata of a document without the (large) document itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Metadata {
+    pub identifier: PrimaryKey<Document>,
+    pub processed_by: PrimaryKey<User>,
+    pub from_person: PrimaryKey<Person>,
+    pub to_person: PrimaryKey<Person>,
+    pub recieved: Date,
+    pub processed: Date,
+    pub description: Option<String>,
+}
+
+impl From<Record<Document>> for Metadata {
+    fn from(value: Record<Document>) -> Self {
+        let identifier = value.identifier;
+        let value: Document = value.value;
+        Metadata {
+            identifier,
+            processed_by: value.processed_by,
+            from_person: value.from_person,
+            to_person: value.to_person,
+            recieved: value.recieved,
+            processed: value.processed,
+            description: value.description,
         }
     }
 }
