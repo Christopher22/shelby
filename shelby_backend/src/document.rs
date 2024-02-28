@@ -1,6 +1,8 @@
+use std::io::Read;
+
 use serde::{Deserialize, Serialize};
 
-use crate::database::{DefaultGenerator, Insertable, PrimaryKey, Record};
+use crate::database::{Database, DatabaseEntry, DefaultGenerator, Insertable, PrimaryKey, Record};
 use crate::{person::Person, user::User, Date};
 
 crate::database::make_struct!(
@@ -19,6 +21,29 @@ crate::database::make_struct!(
     } ("FOREIGN KEY(processed_by) REFERENCES users(id), FOREIGN KEY(from_person) REFERENCES persons(id), FOREIGN KEY(to_person) REFERENCES persons(id)")
 );
 
+impl Document {
+    /// Extract the document and store it in memory.
+    pub fn load_into_memory(
+        database: &Database,
+        identifier: PrimaryKey<Self>,
+    ) -> Result<Vec<u8>, crate::database::Error> {
+        let mut blob = database
+            .connection
+            .blob_open(
+                rusqlite::DatabaseName::Main,
+                Document::TABLE_NAME,
+                "document",
+                identifier.raw_index(),
+                true,
+            )
+            .map_err(crate::database::Error::from)?;
+
+        let mut container = Vec::with_capacity(blob.size() as usize);
+        blob.read_to_end(&mut container)
+            .expect("reading blobs into allocated vector should not fail");
+        Ok(container)
+    }
+}
 impl crate::database::Selectable for Document {
     /// The public output. Other than the value itself, this value should be renderable in JSON without leaking sensible information.
     type Output = Metadata;

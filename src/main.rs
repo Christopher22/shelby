@@ -13,11 +13,13 @@ use auth::{login, logout, AuthenticatedUser};
 use rocket::data::{Limits, ToByteUnit};
 use rocket::{fs::NamedFile, serde::json::Json, State};
 use rocket_dyn_templates::{context, Template};
-use shelby_backend::database::{Database, DefaultGenerator, Insertable, SelectableByPrimaryKey};
+use shelby_backend::database::{
+    Database, DefaultGenerator, Insertable, PrimaryKey, SelectableByPrimaryKey,
+};
 use std::path::PathBuf;
 
 pub use self::frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry};
-pub use self::util::FlexibleInput;
+pub use self::util::{FlexibleInput, PdfOutput};
 pub use self::{config::Config, error::Error};
 
 macro_rules! create_routes {
@@ -290,33 +292,7 @@ macro_rules! write_routes {
     }};
 }
 
-create_routes!(shelby_backend::person::Person {
-    module: person,
-    url: "/persons",
-    get: "/persons/<id>",
-    post: "/persons/new"
-});
-
-create_routes!(shelby_backend::person::Group {
-    module: group,
-    url: "/groups",
-    get: "/groups/<id>",
-    post: "/groups/new"
-});
-
-create_routes!(shelby_backend::document::Document {
-    module: document,
-    url: "/documents",
-    get: "/documents/<id>",
-    post: "/documents/new"
-});
-
-create_routes!(shelby_backend::user::User {
-    module: user,
-    url: "/users",
-    get: "/users/<id>",
-    post: "/users/new"
-});
+// ------------------- Routes -------------------
 
 #[get("/", rank = 1)]
 async fn index_protected(_user: AuthenticatedUser<auth::Forward>) -> Template {
@@ -346,6 +322,43 @@ async fn error_handler(
         )),
     }
 }
+
+create_routes!(shelby_backend::person::Person {
+    module: person,
+    url: "/persons",
+    get: "/persons/<id>",
+    post: "/persons/new"
+});
+
+create_routes!(shelby_backend::person::Group {
+    module: group,
+    url: "/groups",
+    get: "/groups/<id>",
+    post: "/groups/new"
+});
+
+create_routes!(shelby_backend::document::Document {
+    module: document,
+    url: "/documents",
+    get: "/documents/<id>",
+    post: "/documents/new"
+});
+
+#[get("/documents/<id>/pdf")]
+async fn download_document(
+    id: i64,
+    state: &State<Config>,
+    _user: AuthenticatedUser,
+) -> Result<PdfOutput, Error> {
+    PdfOutput::new(&state.database(), PrimaryKey::from(id))
+}
+
+create_routes!(shelby_backend::user::User {
+    module: user,
+    url: "/users",
+    get: "/users/<id>",
+    post: "/users/new"
+});
 
 #[launch]
 fn rocket() -> _ {
@@ -394,7 +407,14 @@ fn rocket() -> _ {
                 person,
                 group,
                 document,
-                user + (index_protected, index_public, serve_files, login, logout)
+                user + (
+                    index_protected,
+                    index_public,
+                    serve_files,
+                    login,
+                    logout,
+                    download_document
+                )
             ),
         )
 }
@@ -569,5 +589,40 @@ mod tests {
 
         let response = response.into_string().expect("valid str");
         let _: () = rocket::serde::json::from_str(&response).expect("valid json");
+    }
+
+    #[test]
+    fn test_document_pdf() {
+        let engine = rocket();
+        let example_data = vec![42u8, 41, 40];
+        let example = {
+            let state: &State<Config> = State::get(&engine).expect("valid database");
+
+            let mut example = shelby_backend::document::Document::create_default(&state.database());
+            example.document = example_data.clone();
+            example
+        };
+
+        let client = crate::tests::login(engine);
+        let creation_response = client.post("/documents").json(&example).dispatch();
+        assert_eq!(creation_response.status(), rocket::http::Status::Created);
+
+        // Generate the URL for the PDF
+        let pdf_url = format!(
+            "{}/pdf",
+            creation_response
+                .headers()
+                .get_one("Location")
+                .expect("valid string")
+        );
+
+        let response = client.get(pdf_url).dispatch();
+        // Check that the PDF should be viewed in the browser
+        assert_eq!(
+            response.headers().get_one("Content-Disposition"),
+            Some("inline")
+        );
+        assert_eq!(response.content_type(), Some(ContentType::PDF));
+        assert_eq!(response.into_bytes().expect("valid bytes"), example_data);
     }
 }
