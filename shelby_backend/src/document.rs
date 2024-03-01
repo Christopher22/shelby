@@ -59,6 +59,8 @@ impl crate::database::Selectable for Document {
         Option<String>,
     );
 
+    const SORTABLE_COLUMNS: &'static [&'static str] = &["id", "recieved", "processed"];
+
     /// The statement for selecting all entries.
     const STATEMENT_SELECT_ALL: &'static str = "SELECT id, processed_by, from_person, to_person, recieved, processed, description FROM documents";
 

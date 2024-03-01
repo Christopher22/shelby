@@ -88,6 +88,8 @@ impl crate::database::Selectable for User {
         User::TABLE_NAME
     );
 
+    const SORTABLE_COLUMNS: &'static [&'static str] = &["id", "creation_date"];
+
     /// Deserialize the database value into a Record.
     fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> Self::Output {
         Metadata {

@@ -5,4 +5,4 @@ pub mod user;
 
 mod util;
 
-pub use self::util::{Date, DateError};
+pub use self::util::{Date, DateError, Length, Order, Pagination, PaginationError};

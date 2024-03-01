@@ -12,6 +12,11 @@ macro_rules! impl_select {
 
             const STATEMENT_SELECT_ALL: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name);
 
+            // By now, we fill all those not sortable values with id. That will be safe.
+            const SORTABLE_COLUMNS: &'static [&'static str] = &[
+                "id", $(if <$ty as crate::database::DatabaseType>::IS_SORTABLE { stringify!($element) } else { "id" }),*
+            ];
+
             type SelectValue<'a> = (i64, $( $ty ),*);
 
             fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> crate::database::Record<Self> {
@@ -184,8 +189,12 @@ pub(crate) use question_mark;
 
 #[cfg(test)]
 mod test {
-    use crate::database::{
-        Database, DatabaseEntry, Insertable, PrimaryKey, Record, SelectableByPrimaryKey,
+    use crate::{
+        database::{
+            Database, DatabaseEntry, Insertable, PrimaryKey, Record, Selectable,
+            SelectableByPrimaryKey,
+        },
+        Length, Order, Pagination,
     };
 
     crate::database::make_struct!(
@@ -210,6 +219,30 @@ mod test {
             string_value: String
         }
     );
+
+    fn generate_pagination_data(pagination: Pagination<Test>) -> Vec<u32> {
+        let database = Database::plain().expect("valid database");
+        Test::create_table(&database).expect("valid table");
+
+        // Fill the values
+        for integer_value in [42u32, 43, 44] {
+            Test {
+                bool_value: false,
+                string_value: String::from("ABC"),
+                integer_value,
+            }
+            .insert(&database)
+            .expect("insert sucessfull");
+        }
+
+        let created_values =
+            Test::select_all_sorted(&database, pagination).expect("valid database query");
+
+        created_values
+            .iter()
+            .map(|value| value.integer_value)
+            .collect()
+    }
 
     #[test]
     fn test_table_name() {
@@ -289,7 +322,7 @@ mod test {
     }
 
     #[test]
-    fn primary_key_serialization() {
+    fn test_primary_key_serialization() {
         let primary_key: PrimaryKey<Test> = crate::database::PrimaryKey::from(0);
         assert_eq!(
             serde_json::to_string(&primary_key).expect("str"),
@@ -298,12 +331,49 @@ mod test {
     }
 
     #[test]
-    fn primary_key_deserialization() {
+    fn test_primary_key_deserialization() {
         const TEST_INPUT: &'static str = "\"/tests/42\"";
         assert_eq!(
             serde_json::from_str::<crate::database::PrimaryKey<Test>>(TEST_INPUT)
                 .expect("valid key"),
             crate::database::PrimaryKey::from(42)
         );
+    }
+
+    #[test]
+    fn test_sortable_columns() {
+        assert_eq!(Test::SORTABLE_COLUMNS, ["id", "id", "id", "integer_value"]);
+    }
+
+    #[test]
+    fn test_sorted_select_asc() {
+        let pagination = Pagination::new("integer_value", 0, Length::from(5), Order::Ascending)
+            .expect("valid pagination");
+
+        assert_eq!(generate_pagination_data(pagination), vec![42, 43, 44]);
+    }
+
+    #[test]
+    fn test_sorted_select_desc() {
+        let pagination = Pagination::new("integer_value", 0, Length::from(5), Order::Descending)
+            .expect("valid pagination");
+
+        assert_eq!(generate_pagination_data(pagination), vec![44, 43, 42]);
+    }
+
+    #[test]
+    fn test_sorted_select_desc_offset() {
+        let pagination = Pagination::new("integer_value", 1, Length::from(5), Order::Descending)
+            .expect("valid pagination");
+
+        assert_eq!(generate_pagination_data(pagination), vec![43, 42]);
+    }
+
+    #[test]
+    fn test_sorted_select_desc_offset_and_limit() {
+        let pagination = Pagination::new("integer_value", 0, Length::from(2), Order::Descending)
+            .expect("valid pagination");
+
+        assert_eq!(generate_pagination_data(pagination), vec![44, 43]);
     }
 }

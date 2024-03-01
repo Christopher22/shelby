@@ -1,6 +1,7 @@
 use rusqlite::OptionalExtension;
 
 use super::{Database, Error, PrimaryKey, Record};
+use crate::util::Pagination;
 
 pub trait Dependency {
     fn create_dependencies(database: &Database) -> Result<(), Error>;
@@ -92,12 +93,28 @@ pub trait Selectable: DatabaseEntry + Indexable {
     /// The statement for selecting all entries.
     const STATEMENT_SELECT_ALL: &'static str;
 
+    /// The sortable values within a table.
+    const SORTABLE_COLUMNS: &'static [&'static str];
+
     /// Deserialize the database value into a Record.
     fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> Self::Output;
 
     /// Select all the elements from the database.
     fn select_all(database: &Database) -> Result<Vec<Self::Output>, Error> {
         let mut stmt = database.connection.prepare(Self::STATEMENT_SELECT_ALL)?;
+        let iterator = stmt.query_map((), |row| {
+            Self::SelectValue::try_from(row).map(Self::deserialize_sql)
+        })?;
+
+        Ok(iterator.filter_map(|value| value.ok()).collect())
+    }
+
+    fn select_all_sorted(
+        database: &Database,
+        selection: Pagination<Self>,
+    ) -> Result<Vec<Self::Output>, Error> {
+        let statement = format!("{} {}", Self::STATEMENT_SELECT_ALL, selection);
+        let mut stmt = database.connection.prepare(&statement)?;
         let iterator = stmt.query_map((), |row| {
             Self::SelectValue::try_from(row).map(Self::deserialize_sql)
         })?;
@@ -149,29 +166,35 @@ pub trait DatabaseType: rusqlite::types::FromSql + rusqlite::types::ToSql {
 
     /// The column value which should normaly be the RAW_COLUMN_VALUE + ' NOT NULL'.
     const COLUMN_VALUE: &'static str;
+
+    /// Indicate if it makes sense to sort an type.
+    const IS_SORTABLE: bool;
 }
 
 macro_rules! create_database_type {
-    ($name: ty => $value: expr) => {
+    ($name: ty => $value: expr; sortable: $is_sortable: expr) => {
         impl crate::database::DatabaseType for $name {
             const RAW_COLUMN_VALUE: &'static str = $value;
             const COLUMN_VALUE: &'static str = const_format::concatcp!($value, " NOT NULL");
+            const IS_SORTABLE: bool = $is_sortable;
         }
     };
 }
 
-create_database_type!(bool => "BOOL");
-create_database_type!(u32 => "INTEGER");
-create_database_type!(String => "TEXT");
-create_database_type!(crate::Date => "DATETIME");
-create_database_type!(Vec<u8> => "BLOB");
+create_database_type!(bool => "BOOL"; sortable: false);
+create_database_type!(u32 => "INTEGER"; sortable: true);
+create_database_type!(String => "TEXT"; sortable: false);
+create_database_type!(crate::Date => "DATETIME"; sortable: true);
+create_database_type!(Vec<u8> => "BLOB"; sortable: false);
 
 impl<T: crate::database::Indexable> DatabaseType for crate::database::PrimaryKey<T> {
     const RAW_COLUMN_VALUE: &'static str = "INTEGER";
     const COLUMN_VALUE: &'static str = "INTEGER NOT NULL";
+    const IS_SORTABLE: bool = true;
 }
 
 impl<T: DatabaseType> DatabaseType for Option<T> {
     const RAW_COLUMN_VALUE: &'static str = T::RAW_COLUMN_VALUE;
     const COLUMN_VALUE: &'static str = T::RAW_COLUMN_VALUE;
+    const IS_SORTABLE: bool = false;
 }
