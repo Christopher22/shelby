@@ -151,7 +151,7 @@ where
     }
 }
 
-impl InsertableDatabaseEntry for shelby_backend::person::Person {
+impl InsertableDatabaseEntry for crate::backend::person::Person {
     const NAME: &'static str = "New person";
     const FIELDS: [Field; 5] = [
         Field::new(
@@ -200,7 +200,7 @@ impl InsertableDatabaseEntry for shelby_backend::person::Person {
     type FieldsType = [Field; 5];
 }
 
-impl InsertableDatabaseEntry for shelby_backend::document::Document {
+impl InsertableDatabaseEntry for crate::backend::document::Document {
     const NAME: &'static str = "New document";
     const FIELDS: [Field; 7] = [
         Field::new(
@@ -250,7 +250,7 @@ impl InsertableDatabaseEntry for shelby_backend::document::Document {
         ),
         Field::new(
             "processed",
-            InputType::Hidden(|_| shelby_backend::Date::today().to_string()),
+            InputType::Hidden(|_| crate::backend::Date::today().to_string()),
         ),
     ];
 
@@ -258,7 +258,7 @@ impl InsertableDatabaseEntry for shelby_backend::document::Document {
     type FieldsType = [Field; 7];
 }
 
-impl InsertableDatabaseEntry for shelby_backend::person::Group {
+impl InsertableDatabaseEntry for crate::backend::person::Group {
     const NAME: &'static str = "New group";
     const FIELDS: [Field; 1] = [Field::new(
         "description",
@@ -273,7 +273,7 @@ impl InsertableDatabaseEntry for shelby_backend::person::Group {
     type FieldsType = [Field; 1];
 }
 
-impl InsertableDatabaseEntry for shelby_backend::user::User {
+impl InsertableDatabaseEntry for crate::backend::user::User {
     const NAME: &'static str = "New user";
     const FIELDS: [Field; 5] = [
         Field::new(
@@ -302,7 +302,7 @@ impl InsertableDatabaseEntry for shelby_backend::user::User {
         ),
         Field::new(
             "creation_date",
-            InputType::Hidden(|_| shelby_backend::Date::today().to_string()),
+            InputType::Hidden(|_| crate::backend::Date::today().to_string()),
         ),
         Field::new("active", InputType::Hidden(|_| String::from("true"))),
     ];

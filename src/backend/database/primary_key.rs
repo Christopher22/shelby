@@ -139,7 +139,7 @@ impl<'de, T: Indexable> serde::de::Visitor<'de> for PrimaryKeyVisitor<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::backend::{
         database::{PrimaryKey, PrimaryKeyParseError},
         person::Person,
     };

@@ -1,7 +1,9 @@
-use crate::database::{Database, DatabaseEntry, Error, PrimaryKey};
-use crate::Date;
+use crate::backend::{
+    database::{Database, DatabaseEntry, Error, PrimaryKey},
+    Date,
+};
 
-crate::database::make_struct!(
+crate::backend::database::make_struct!(
     #[derive(Default, serde::Serialize, serde::Deserialize)]
     #[table("persons")]
     #[dependencies(())]
@@ -15,7 +17,7 @@ crate::database::make_struct!(
     }
 );
 
-crate::database::make_struct!(
+crate::backend::database::make_struct!(
     #[derive(Default, serde::Serialize, serde::Deserialize)]
     #[table("groups")]
     #[dependencies(())]
@@ -98,7 +100,7 @@ impl Membership {
 
 #[cfg(test)]
 mod membership_tests {
-    use crate::database::{Database, DatabaseEntry, Insertable, PrimaryKey};
+    use crate::backend::database::{Database, DatabaseEntry, Insertable, PrimaryKey};
 
     use super::{Group, Membership, Person};
 
@@ -165,7 +167,7 @@ mod membership_tests {
         let membership = Membership {
             person: p1.clone(),
             group: g1.clone(),
-            updated: Some(crate::Date::today()),
+            updated: Some(crate::backend::Date::today()),
             comment: Some(String::from("Example")),
         };
 

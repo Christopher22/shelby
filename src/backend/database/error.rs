@@ -33,8 +33,8 @@ impl std::error::Error for Error {}
 #[cfg(test)]
 mod tests {
     use crate::{
-        database::{Database, Insertable, PrimaryKey},
-        user::{PasswordHash, User},
+        backend::database::{Database, Insertable, PrimaryKey},
+        backend::user::{PasswordHash, User},
     };
 
     #[test]
@@ -45,7 +45,7 @@ mod tests {
             password_hash: PasswordHash::new("Chris", "test1234"),
             related_to: Some(PrimaryKey::from(42)),
             active: true,
-            creation_date: crate::Date::today(),
+            creation_date: crate::backend::Date::today(),
         };
 
         assert!(document

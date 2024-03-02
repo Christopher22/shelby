@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::backend::{database::PrimaryKey, document::Document, Date};
 use rocket::{
     async_trait,
     data::{FromData, Outcome},
@@ -8,7 +9,6 @@ use rocket::{
     serde::json::Json,
     Data, Request,
 };
-use shelby_backend::{database::PrimaryKey, document::Document, Date};
 
 /// Data which might be parsted both as JSON and as a form.
 pub struct FlexibleInput<T: MappableForm>(T);
@@ -100,7 +100,7 @@ pub struct DocumentForm<'r> {
     description: Option<String>,
 }
 
-impl MappableForm for shelby_backend::document::Document {
+impl MappableForm for crate::backend::document::Document {
     type FormType<'r> = DocumentForm<'r>;
 
     fn try_map<'r>(form: Self::FormType<'r>) -> Result<Self, (Status, MappingError<'r>)> {

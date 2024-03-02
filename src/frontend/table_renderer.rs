@@ -1,11 +1,11 @@
-use rocket::serde::Serialize;
-use rocket_dyn_templates::context;
-use shelby_backend::{
+use crate::backend::{
     database::{Database, Record, Selectable},
     document::Document,
     person::{Group, Person},
     user::User,
 };
+use rocket::serde::Serialize;
+use rocket_dyn_templates::context;
 
 use super::Renderable;
 
@@ -47,7 +47,7 @@ pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
     /// Create a list for rendering all elements.
     fn prepare_rendering_all(
         database: &Database,
-    ) -> Result<TableRenderer<N, Self>, shelby_backend::database::Error> {
+    ) -> Result<TableRenderer<N, Self>, crate::backend::database::Error> {
         Ok(TableRenderer(
             Self::select_all(database)?
                 .into_iter()

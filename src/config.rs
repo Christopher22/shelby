@@ -4,8 +4,8 @@ use std::{
     sync::Mutex,
 };
 
+use crate::backend::database::Database;
 use rocket::fs::NamedFile;
-use shelby_backend::database::Database;
 
 pub struct Config {
     database: Mutex<Database>,

@@ -2,7 +2,7 @@ use rocket::{http::Status, response::Responder};
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    DatabaseError(shelby_backend::database::Error),
+    DatabaseError(crate::backend::database::Error),
     NotFound,
     ConstraintViolation,
     WrongPassword,
@@ -19,8 +19,8 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl From<shelby_backend::database::Error> for Error {
-    fn from(value: shelby_backend::database::Error) -> Self {
+impl From<crate::backend::database::Error> for Error {
+    fn from(value: crate::backend::database::Error) -> Self {
         match value.is_constraint_violation() {
             true => Error::ConstraintViolation,
             false => Error::DatabaseError(value),

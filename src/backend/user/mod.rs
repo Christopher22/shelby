@@ -1,14 +1,16 @@
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
-use crate::database::{Database, DatabaseEntry, DefaultGenerator, PrimaryKey, Record};
-use crate::person::Person;
-use crate::Date;
+use crate::backend::{
+    database::{Database, DatabaseEntry, DefaultGenerator, PrimaryKey, Record},
+    person::Person,
+    Date,
+};
 
 mod password_hash;
 pub use self::password_hash::PasswordHash;
 
-crate::database::make_struct!(
+crate::backend::database::make_struct!(
     #[derive(Serialize)]
     #[table("users")]
     #[dependencies(Person)]
@@ -27,7 +29,7 @@ impl User {
     pub fn select_by_name(
         database: &Database,
         name: impl AsRef<str>,
-    ) -> Result<Option<Record<Self>>, crate::database::Error> {
+    ) -> Result<Option<Record<Self>>, crate::backend::database::Error> {
         const SELECT_BY_NAME_QUERY: &'static str =
             const_format::formatcp!("SELECT * FROM {} WHERE username = ?", User::TABLE_NAME);
 
@@ -69,7 +71,7 @@ impl DefaultGenerator for User {
     }
 }
 
-impl crate::database::Selectable for User {
+impl crate::backend::database::Selectable for User {
     /// The public output. Other than the value itself, this value should be renderable in JSON without leaking sensible information.
     type Output = Metadata;
 
@@ -102,9 +104,9 @@ impl crate::database::Selectable for User {
     }
 }
 
-impl crate::database::SelectableByPrimaryKey for User {
+impl crate::backend::database::SelectableByPrimaryKey for User {
     const STATEMENT_SELECT: &'static str = const_format::concatcp!(
-        <User as crate::database::Selectable>::STATEMENT_SELECT_ALL,
+        <User as crate::backend::database::Selectable>::STATEMENT_SELECT_ALL,
         " WHERE id = ?"
     );
 }
@@ -174,7 +176,7 @@ impl From<Record<User>> for Metadata {
 #[cfg(test)]
 mod tests {
     use super::{PasswordHash, User};
-    use crate::{
+    use crate::backend::{
         database::{Database, DatabaseEntry, DefaultGenerator, Insertable, Record},
         Date,
     };

@@ -1,21 +1,24 @@
 #![allow(non_snake_case)] // Required due to https://github.com/rwf2/Rocket/issues/1003
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
 #[macro_use]
 extern crate rocket;
 
 mod auth;
+mod backend;
 mod config;
 mod error;
 mod frontend;
 mod util;
 
+use self::backend::database::{
+    Database, DefaultGenerator, Insertable, PrimaryKey, SelectableByPrimaryKey,
+};
 use auth::{login, logout, AuthenticatedUser};
 use rocket::data::{Limits, ToByteUnit};
 use rocket::{fs::NamedFile, serde::json::Json, State};
 use rocket_dyn_templates::{context, Template};
-use shelby_backend::database::{
-    Database, DefaultGenerator, Insertable, PrimaryKey, SelectableByPrimaryKey,
-};
 use std::path::PathBuf;
 
 pub use self::frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry};
@@ -30,9 +33,9 @@ macro_rules! create_routes {
         post: $path_add: literal
     }) => {
         mod $function_name {
+            use crate::backend::database::{Insertable, Selectable};
             use rocket::{response::status, serde::json::Json, State};
             use rocket_dyn_templates::Template;
-            use shelby_backend::database::{Insertable, Selectable};
 
             use crate::{
                 auth::AuthenticatedUser,
@@ -91,10 +94,10 @@ macro_rules! create_routes {
 
             #[cfg(test)]
             mod tests {
+                use crate::backend::database::{DefaultGenerator, PrimaryKey, Record, Selectable};
                 use crate::frontend::RenderableDatabaseEntry;
                 use crate::{rocket, Config};
                 use rocket::{http::Status, local::blocking::Client, serde::json, State};
-                use shelby_backend::database::{DefaultGenerator, PrimaryKey, Record, Selectable};
 
                 use super::DatabaseEntry as TargetEntity;
                 const ACCESS_POINT: &'static str = $path;
@@ -323,21 +326,21 @@ async fn error_handler(
     }
 }
 
-create_routes!(shelby_backend::person::Person {
+create_routes!(crate::backend::person::Person {
     module: person,
     url: "/persons",
     get: "/persons/<id>",
     post: "/persons/new"
 });
 
-create_routes!(shelby_backend::person::Group {
+create_routes!(crate::backend::person::Group {
     module: group,
     url: "/groups",
     get: "/groups/<id>",
     post: "/groups/new"
 });
 
-create_routes!(shelby_backend::document::Document {
+create_routes!(crate::backend::document::Document {
     module: document,
     url: "/documents",
     get: "/documents/<id>",
@@ -353,7 +356,7 @@ async fn download_document(
     PdfOutput::new(&state.database(), PrimaryKey::from(id))
 }
 
-create_routes!(shelby_backend::user::User {
+create_routes!(crate::backend::user::User {
     module: user,
     url: "/users",
     get: "/users/<id>",
@@ -366,9 +369,9 @@ fn rocket() -> _ {
 
     // Add a first default user
     {
-        let mut admin = shelby_backend::user::User::create_default(&database);
+        let mut admin = crate::backend::user::User::create_default(&database);
         admin.username = String::from("admin");
-        admin.password_hash = shelby_backend::user::PasswordHash::new("admin", "test1234");
+        admin.password_hash = crate::backend::user::PasswordHash::new("admin", "test1234");
         admin.insert(&database).expect("unable to add Admin user");
     }
 
@@ -422,9 +425,9 @@ fn rocket() -> _ {
 #[cfg(test)]
 mod tests {
     use super::{auth, rocket, Config};
+    use crate::backend::database::{DefaultGenerator, Insertable};
     use rocket::{http::ContentType, local::blocking::Client, State};
     use rocket_dyn_templates::context;
-    use shelby_backend::database::{DefaultGenerator, Insertable};
 
     fn add_user<P: rocket::Phase>(
         engine: rocket::Rocket<P>,
@@ -437,16 +440,16 @@ mod tests {
     fn add_user_with_callback<P: rocket::Phase, T>(
         engine: rocket::Rocket<P>,
         credentials: &auth::Credentials,
-        callback: impl Fn(&shelby_backend::database::Database) -> T,
+        callback: impl Fn(&crate::backend::database::Database) -> T,
     ) -> (Client, T) {
         let result = {
             let database_container: &State<Config> = State::get(&engine).expect("valid database");
             let database = database_container.database();
 
-            let mut user = shelby_backend::user::User::create_default(&database);
+            let mut user = crate::backend::user::User::create_default(&database);
             user.username = String::from(&credentials.user);
             user.password_hash =
-                shelby_backend::user::PasswordHash::new(&credentials.user, &credentials.password);
+                crate::backend::user::PasswordHash::new(&credentials.user, &credentials.password);
             user.insert(&database).expect("user insertion sucessfull");
 
             callback(&database)
@@ -472,7 +475,7 @@ mod tests {
 
     pub fn login_with_callback<P: rocket::Phase, T>(
         engine: rocket::Rocket<P>,
-        callback: impl Fn(&shelby_backend::database::Database) -> T,
+        callback: impl Fn(&crate::backend::database::Database) -> T,
     ) -> (Client, T) {
         let credentials = auth::Credentials {
             user: String::from("Chris"),
@@ -598,7 +601,7 @@ mod tests {
         let example = {
             let state: &State<Config> = State::get(&engine).expect("valid database");
 
-            let mut example = shelby_backend::document::Document::create_default(&state.database());
+            let mut example = crate::backend::document::Document::create_default(&state.database());
             example.document = example_data.clone();
             example
         };

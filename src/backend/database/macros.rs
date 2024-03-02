@@ -7,47 +7,47 @@ macro_rules! question_mark {
 macro_rules! impl_select {
     (false, $name: ident, $table_name: expr, $($element: ident: $ty: ty),*) => {};
     (true, $name: ident, $table_name: expr, $($element: ident: $ty: ty),*) => {
-        impl crate::database::Selectable for $name {
-            type Output = crate::database::Record<Self>;
+        impl crate::backend::database::Selectable for $name {
+            type Output = crate::backend::database::Record<Self>;
 
             const STATEMENT_SELECT_ALL: &'static str = std::concat!("SELECT id, ", concat_with::concat!(with ", ", $(stringify!($element)),*) ," FROM ", $table_name);
 
             // By now, we fill all those not sortable values with id. That will be safe.
             const SORTABLE_COLUMNS: &'static [&'static str] = &[
-                "id", $(if <$ty as crate::database::DatabaseType>::IS_SORTABLE { stringify!($element) } else { "id" }),*
+                "id", $(if <$ty as crate::backend::database::DatabaseType>::IS_SORTABLE { stringify!($element) } else { "id" }),*
             ];
 
             type SelectValue<'a> = (i64, $( $ty ),*);
 
-            fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> crate::database::Record<Self> {
+            fn deserialize_sql<'a>(value: Self::SelectValue<'a>) -> crate::backend::database::Record<Self> {
                 let (primary_key, $( $element ),*) = value;
-                crate::database::Record {
-                    identifier: crate::database::PrimaryKey::from(primary_key),
+                crate::backend::database::Record {
+                    identifier: crate::backend::database::PrimaryKey::from(primary_key),
                     value: $name { $( $element ),* }
                 }
             }
         }
 
-        impl crate::database::SelectableByPrimaryKey for $name {
-            const STATEMENT_SELECT: &'static str = const_format::concatcp!(<$name as crate::database::Selectable>::STATEMENT_SELECT_ALL, " WHERE id = ?");
+        impl crate::backend::database::SelectableByPrimaryKey for $name {
+            const STATEMENT_SELECT: &'static str = const_format::concatcp!(<$name as crate::backend::database::Selectable>::STATEMENT_SELECT_ALL, " WHERE id = ?");
 
             /// Select an element and parse it.
-            fn select(database: &crate::database::Database, index: PrimaryKey<Self>) -> Result<Self::Output, crate::database::Error> {
+            fn select(database: &crate::backend::database::Database, index: PrimaryKey<Self>) -> Result<Self::Output, crate::backend::database::Error> {
                 Ok(database
                     .connection
                     .query_row(Self::STATEMENT_SELECT, (index.0,), |row| {
-                        Self::SelectValue::try_from(row).map(<Self as crate::database::Selectable>::deserialize_sql)
+                        Self::SelectValue::try_from(row).map(<Self as crate::backend::database::Selectable>::deserialize_sql)
                     })?)
             }
 
             /// Try to select a element which primary key was not validated.
-            fn try_select(database: &crate::database::Database, index: i64) -> Result<Option<Self::Output>, crate::database::Error> {
+            fn try_select(database: &crate::backend::database::Database, index: i64) -> Result<Option<Self::Output>, crate::backend::database::Error> {
                 use rusqlite::OptionalExtension;
 
                 Ok(database
                     .connection
                     .query_row(Self::STATEMENT_SELECT, (index,), |row| {
-                        Self::SelectValue::try_from(row).map(<Self as crate::database::Selectable>::deserialize_sql)
+                        Self::SelectValue::try_from(row).map(<Self as crate::backend::database::Selectable>::deserialize_sql)
                     })
                     .optional()?)
             }
@@ -58,11 +58,11 @@ macro_rules! impl_select {
 #[cfg(test)]
 macro_rules! impl_select_test {
     (true, $name: ident) => {
-        use crate::database::{Selectable, SelectableByPrimaryKey};
+        use crate::backend::database::{Selectable, SelectableByPrimaryKey};
 
         #[test]
         fn test_select_automatically() {
-            let database = crate::database::Database::plain().expect("valid database");
+            let database = crate::backend::database::Database::plain().expect("valid database");
             $name::create_table(&database).expect("valid table");
 
             let example = $name::create_default(&database);
@@ -74,7 +74,7 @@ macro_rules! impl_select_test {
 
         #[test]
         fn test_select_all() {
-            let database = crate::database::Database::plain().expect("valid database");
+            let database = crate::backend::database::Database::plain().expect("valid database");
             $name::create_table(&database).expect("valid table");
 
             let example = $name::create_default(&database);
@@ -90,7 +90,7 @@ macro_rules! impl_select_test {
 
         #[test]
         fn test_select_raw() {
-            let database = crate::database::Database::plain().expect("valid database");
+            let database = crate::backend::database::Database::plain().expect("valid database");
             $name::create_table(&database).expect("valid table");
 
             let example = $name::create_default(&database);
@@ -108,7 +108,7 @@ macro_rules! impl_select_test {
         fn test_select_raw_noexisting() {
             const NONEXISTING_INDEX: i64 = 42;
 
-            let database = crate::database::Database::plain().expect("valid database");
+            let database = crate::backend::database::Database::plain().expect("valid database");
             $name::create_table(&database).expect("valid table");
 
             let index = $name::create_default(&database)
@@ -139,18 +139,18 @@ macro_rules! make_struct {(
             $( $(#[$os_attr])? pub $element: $ty),*
         }
 
-        impl crate::database::DatabaseEntry for $name {
+        impl crate::backend::database::DatabaseEntry for $name {
             type DependsOn = $dependencies;
 
             const TABLE_NAME: &'static str = $table_name;
             const STATEMENT_CREATE_TABLE: &'static str = const_format::concatcp!(
-                "CREATE TABLE IF NOT EXISTS ", $table_name, " (id INTEGER PRIMARY KEY", $( ", ", stringify!($element), " ", <$ty as crate::database::DatabaseType>::COLUMN_VALUE ),* $(, ", ", $additional_conditions, " ")? , " )"
+                "CREATE TABLE IF NOT EXISTS ", $table_name, " (id INTEGER PRIMARY KEY", $( ", ", stringify!($element), " ", <$ty as crate::backend::database::DatabaseType>::COLUMN_VALUE ),* $(, ", ", $additional_conditions, " ")? , " )"
             );
         }
 
-        impl crate::database::Insertable for $name {
+        impl crate::backend::database::Insertable for $name {
             const STATEMENT_INSERT: &'static str = std::concat!(
-                "INSERT INTO ", $table_name, " (", concat_with::concat!(with ", ", $(stringify!($element)),*), ") VALUES (", concat_with::concat!(with ", ", $(crate::database::question_mark!($element)),*), ")"
+                "INSERT INTO ", $table_name, " (", concat_with::concat!(with ", ", $(stringify!($element)),*), ") VALUES (", concat_with::concat!(with ", ", $(crate::backend::database::question_mark!($element)),*), ")"
             );
 
             type InsertValue<'a> = ($( &'a $ty ),*, );
@@ -160,23 +160,23 @@ macro_rules! make_struct {(
             }
         }
 
-        impl crate::database::Indexable for $name { }
+        impl crate::backend::database::Indexable for $name { }
 
-        crate::database::impl_select!($should_impl, $name, $table_name, $($element: $ty),*);
+        crate::backend::database::impl_select!($should_impl, $name, $table_name, $($element: $ty),*);
 
         #[cfg(test)]
         mod [< "test_" $table_name >] {
-            use crate::database::{DatabaseEntry, Insertable, DefaultGenerator};
+            use crate::backend::database::{DatabaseEntry, Insertable, DefaultGenerator};
             use super::$name;
 
             #[test]
             fn test_insert_automatically() {
-                let database = crate::database::Database::plain().expect("valid database");
+                let database = crate::backend::database::Database::plain().expect("valid database");
                 $name::create_table(&database).expect("valid table");
                 $name::create_default(&database).insert(&database).expect("insert sucessfull");
             }
 
-            crate::database::impl_select_test!($should_impl_text, $name);
+            crate::backend::database::impl_select_test!($should_impl_text, $name);
         }
     }
 }}
@@ -189,7 +189,7 @@ pub(crate) use question_mark;
 
 #[cfg(test)]
 mod test {
-    use crate::{
+    use crate::backend::{
         database::{
             Database, DatabaseEntry, Insertable, PrimaryKey, Record, Selectable,
             SelectableByPrimaryKey,
@@ -197,7 +197,7 @@ mod test {
         Length, Order, Pagination,
     };
 
-    crate::database::make_struct!(
+    crate::backend::database::make_struct!(
         #[derive(Default, serde::Serialize, serde::Deserialize)]
         #[table("tests")]
         #[dependencies(())]
@@ -210,7 +210,7 @@ mod test {
     );
 
     // We need to check values with single elements are properly serialized, too.
-    crate::database::make_struct!(
+    crate::backend::database::make_struct!(
         #[derive(Default)]
         #[table("tests_single")]
         #[dependencies(())]
@@ -290,7 +290,7 @@ mod test {
     #[test]
     fn test_serialization() {
         let record = Record {
-            identifier: crate::database::PrimaryKey::from(0),
+            identifier: crate::backend::database::PrimaryKey::from(0),
             value: Test {
                 bool_value: false,
                 string_value: String::from("ABC"),
@@ -307,7 +307,7 @@ mod test {
     #[test]
     fn test_deserialization() {
         let record = Record {
-            identifier: crate::database::PrimaryKey::from(0),
+            identifier: crate::backend::database::PrimaryKey::from(0),
             value: Test {
                 bool_value: false,
                 string_value: String::from("ABC"),
@@ -323,7 +323,7 @@ mod test {
 
     #[test]
     fn test_primary_key_serialization() {
-        let primary_key: PrimaryKey<Test> = crate::database::PrimaryKey::from(0);
+        let primary_key: PrimaryKey<Test> = crate::backend::database::PrimaryKey::from(0);
         assert_eq!(
             serde_json::to_string(&primary_key).expect("str"),
             "\"/tests/0\""
@@ -334,9 +334,9 @@ mod test {
     fn test_primary_key_deserialization() {
         const TEST_INPUT: &'static str = "\"/tests/42\"";
         assert_eq!(
-            serde_json::from_str::<crate::database::PrimaryKey<Test>>(TEST_INPUT)
+            serde_json::from_str::<crate::backend::database::PrimaryKey<Test>>(TEST_INPUT)
                 .expect("valid key"),
-            crate::database::PrimaryKey::from(42)
+            crate::backend::database::PrimaryKey::from(42)
         );
     }
 

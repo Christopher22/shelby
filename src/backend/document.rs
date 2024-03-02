@@ -2,10 +2,12 @@ use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 
-use crate::database::{Database, DatabaseEntry, DefaultGenerator, Insertable, PrimaryKey, Record};
-use crate::{person::Person, user::User, Date};
+use crate::backend::database::{
+    Database, DatabaseEntry, DefaultGenerator, Insertable, PrimaryKey, Record,
+};
+use crate::backend::{person::Person, user::User, Date};
 
-crate::database::make_struct!(
+crate::backend::database::make_struct!(
     #[derive(serde::Serialize, serde::Deserialize)]
     #[table("documents")]
     #[dependencies((Person, User))]
@@ -26,7 +28,7 @@ impl Document {
     pub fn load_into_memory(
         database: &Database,
         identifier: PrimaryKey<Self>,
-    ) -> Result<Vec<u8>, crate::database::Error> {
+    ) -> Result<Vec<u8>, crate::backend::database::Error> {
         let mut blob = database
             .connection
             .blob_open(
@@ -36,7 +38,7 @@ impl Document {
                 identifier.raw_index(),
                 true,
             )
-            .map_err(crate::database::Error::from)?;
+            .map_err(crate::backend::database::Error::from)?;
 
         let mut container = Vec::with_capacity(blob.size() as usize);
         blob.read_to_end(&mut container)
@@ -44,7 +46,7 @@ impl Document {
         Ok(container)
     }
 }
-impl crate::database::Selectable for Document {
+impl crate::backend::database::Selectable for Document {
     /// The public output. Other than the value itself, this value should be renderable in JSON without leaking sensible information.
     type Output = Metadata;
 
@@ -78,15 +80,15 @@ impl crate::database::Selectable for Document {
     }
 }
 
-impl crate::database::SelectableByPrimaryKey for Document {
+impl crate::backend::database::SelectableByPrimaryKey for Document {
     const STATEMENT_SELECT: &'static str = const_format::concatcp!(
-        <Document as crate::database::Selectable>::STATEMENT_SELECT_ALL,
+        <Document as crate::backend::database::Selectable>::STATEMENT_SELECT_ALL,
         " WHERE id = ?"
     );
 }
 
 impl DefaultGenerator for Document {
-    fn create_default(database: &crate::database::Database) -> Self {
+    fn create_default(database: &crate::backend::database::Database) -> Self {
         let person = Person::default().insert(&database).expect("valid person");
         let user = User::create_default(&database)
             .insert(&database)
@@ -135,11 +137,11 @@ impl From<Record<Document>> for Metadata {
 #[cfg(test)]
 mod tests {
     use super::Document;
-    use crate::database::{DefaultGenerator, Insertable};
+    use crate::backend::database::{DefaultGenerator, Insertable};
 
     #[test]
     fn test_availability_in_default_migrations() {
-        let database = crate::database::Database::in_memory().expect("valid database");
+        let database = crate::backend::database::Database::in_memory().expect("valid database");
         Document::create_default(&database)
             .insert(&database)
             .expect("insert sucessfull");

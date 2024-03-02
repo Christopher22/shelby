@@ -1,7 +1,7 @@
 use rusqlite::OptionalExtension;
 
 use super::{Database, Error, PrimaryKey, Record};
-use crate::util::Pagination;
+use crate::backend::util::Pagination;
 
 pub trait Dependency {
     fn create_dependencies(database: &Database) -> Result<(), Error>;
@@ -173,7 +173,7 @@ pub trait DatabaseType: rusqlite::types::FromSql + rusqlite::types::ToSql {
 
 macro_rules! create_database_type {
     ($name: ty => $value: expr; sortable: $is_sortable: expr) => {
-        impl crate::database::DatabaseType for $name {
+        impl crate::backend::database::DatabaseType for $name {
             const RAW_COLUMN_VALUE: &'static str = $value;
             const COLUMN_VALUE: &'static str = const_format::concatcp!($value, " NOT NULL");
             const IS_SORTABLE: bool = $is_sortable;
@@ -184,10 +184,12 @@ macro_rules! create_database_type {
 create_database_type!(bool => "BOOL"; sortable: false);
 create_database_type!(u32 => "INTEGER"; sortable: true);
 create_database_type!(String => "TEXT"; sortable: false);
-create_database_type!(crate::Date => "DATETIME"; sortable: true);
+create_database_type!(crate::backend::Date => "DATETIME"; sortable: true);
 create_database_type!(Vec<u8> => "BLOB"; sortable: false);
 
-impl<T: crate::database::Indexable> DatabaseType for crate::database::PrimaryKey<T> {
+impl<T: crate::backend::database::Indexable> DatabaseType
+    for crate::backend::database::PrimaryKey<T>
+{
     const RAW_COLUMN_VALUE: &'static str = "INTEGER";
     const COLUMN_VALUE: &'static str = "INTEGER NOT NULL";
     const IS_SORTABLE: bool = true;

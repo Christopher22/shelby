@@ -37,26 +37,26 @@ impl Database {
 
     fn get_migrations() -> Migrations<'static> {
         Migrations::new(vec![M::up(const_format::concatcp!(
-            crate::person::Person::STATEMENT_CREATE_TABLE,
+            crate::backend::person::Person::STATEMENT_CREATE_TABLE,
             "; ",
-            crate::person::Group::STATEMENT_CREATE_TABLE,
+            crate::backend::person::Group::STATEMENT_CREATE_TABLE,
             "; ",
-            crate::person::Membership::STATEMENT_CREATE_TABLE,
+            crate::backend::person::Membership::STATEMENT_CREATE_TABLE,
             "; ",
-            crate::user::User::STATEMENT_CREATE_TABLE,
+            crate::backend::user::User::STATEMENT_CREATE_TABLE,
             "; ",
-            crate::document::Document::STATEMENT_CREATE_TABLE,
+            crate::backend::document::Document::STATEMENT_CREATE_TABLE,
             "; ",
         ))
         .down(const_format::concatcp!(
             "DROP TABLE ",
-            crate::person::Person::TABLE_NAME,
+            crate::backend::person::Person::TABLE_NAME,
             "; DROP TABLE ",
-            crate::person::Group::TABLE_NAME,
+            crate::backend::person::Group::TABLE_NAME,
             "; DROP TABLE ",
-            crate::person::Membership::TABLE_NAME,
+            crate::backend::person::Membership::TABLE_NAME,
             "; DROP TABLE ",
-            crate::user::User::TABLE_NAME,
+            crate::backend::user::User::TABLE_NAME,
             "; ",
         ))])
     }
@@ -64,7 +64,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use crate::database::Database;
+    use crate::backend::database::Database;
 
     #[test]
     fn test_migrations() {

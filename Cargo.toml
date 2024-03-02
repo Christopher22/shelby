@@ -5,10 +5,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-shelby_backend = { path = "shelby_backend" }
 rocket = { version = "0.5", features = ["json", "secrets"] }
 paste = "1.0"
 rocket_dyn_templates = { version = "0.1", features = ["tera"] }
-
-[workspace]
-members = ["shelby_backend"]
+rusqlite = { version = "0.30", features = ["bundled", "chrono", "blob"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+concat-with = "0.2"
+ring = "0.17"
+rusqlite_migration = "1.1.0"
+const_format = "0.2"

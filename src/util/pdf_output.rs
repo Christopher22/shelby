@@ -1,11 +1,11 @@
+use crate::backend::{
+    database::{Database, PrimaryKey},
+    document::Document,
+};
 use rocket::{
     http::{ContentType, Header},
     response::{self, Responder},
     Request, Response,
-};
-use shelby_backend::{
-    database::{Database, PrimaryKey},
-    document::Document,
 };
 
 #[derive(Debug, Clone)]

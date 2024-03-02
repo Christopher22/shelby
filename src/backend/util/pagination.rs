@@ -1,5 +1,6 @@
-use crate::database::Selectable;
+use crate::backend::database::Selectable;
 
+/// A subsection of selection results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pagination<T> {
     pub offset: usize,
@@ -49,6 +50,7 @@ impl<T: Selectable> std::fmt::Display for Pagination<T> {
     }
 }
 
+/// The number of samples within the pagination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Length(usize);
 
@@ -87,8 +89,10 @@ impl PartialEq<usize> for Length {
     }
 }
 
+/// An error retuned during pagination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
+    /// The specified column does not exist.
     InvalidColumn,
 }
 
@@ -100,9 +104,12 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// The order the values are sorted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Order {
+    /// The items are sorted in ascending order.
     Ascending,
+    /// The items are sorted in descending order.
     Descending,
 }
 
@@ -118,7 +125,7 @@ impl std::fmt::Display for Order {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::user::User;
+    use crate::backend::user::User;
 
     #[test]
     fn test_pagination_new() {

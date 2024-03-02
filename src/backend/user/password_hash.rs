@@ -106,7 +106,7 @@ impl rusqlite::types::FromSql for PasswordHash {
     }
 }
 
-impl crate::database::DatabaseType for PasswordHash {
+impl crate::backend::database::DatabaseType for PasswordHash {
     const RAW_COLUMN_VALUE: &'static str = "BLOB";
     const COLUMN_VALUE: &'static str = "BLOB NOT NULL";
     const IS_SORTABLE: bool = false;

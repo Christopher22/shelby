@@ -1,3 +1,7 @@
+use crate::backend::{
+    database::{PrimaryKey, Record},
+    user::User,
+};
 use rocket::{
     form::{Form, Strict},
     http::{Cookie, CookieJar, Status},
@@ -5,10 +9,6 @@ use rocket::{
     response::Redirect,
     serde::json,
     State,
-};
-use shelby_backend::{
-    database::{PrimaryKey, Record},
-    user::User,
 };
 
 use super::{Config, Error};
