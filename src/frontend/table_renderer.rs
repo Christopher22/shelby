@@ -92,14 +92,17 @@ impl RenderableDatabaseEntry<2> for Group {
     }
 }
 
-impl RenderableDatabaseEntry<4> for Document {
+impl RenderableDatabaseEntry<6> for Document {
     const TITLE: &'static str = "Documents";
-    const COLUMNS: [&'static str; 4] = ["Name", "From", "To", "Description"];
+    const COLUMNS: [&'static str; 6] =
+        ["File", "Recieved", "Processed", "From", "To", "Description"];
     const URL_ADD: &'static str = "/documents/new";
 
-    fn generate_table_row(document: <Document as Selectable>::Output) -> [String; 4] {
+    fn generate_table_row(document: <Document as Selectable>::Output) -> [String; 6] {
         [
-            document.identifier.to_string(),
+            format!("<a href=\"{}/pdf\">PDF</a>", document.identifier),
+            document.recieved.to_string(),
+            document.processed.to_string(),
             document.from_person.to_string(),
             document.to_person.to_string(),
             document.description.unwrap_or_default(),
@@ -107,14 +110,13 @@ impl RenderableDatabaseEntry<4> for Document {
     }
 }
 
-impl RenderableDatabaseEntry<4> for User {
+impl RenderableDatabaseEntry<3> for User {
     const TITLE: &'static str = "Users";
-    const COLUMNS: [&'static str; 4] = ["Identifier", "Name", "Creation date", "Used by"];
+    const COLUMNS: [&'static str; 3] = ["Name", "Creation date", "Used by"];
     const URL_ADD: &'static str = "/users/new";
 
-    fn generate_table_row(user: <User as Selectable>::Output) -> [String; 4] {
+    fn generate_table_row(user: <User as Selectable>::Output) -> [String; 3] {
         [
-            user.identifier.to_string(),
             user.username.to_string(),
             user.creation_date.to_string(),
             user.related_to

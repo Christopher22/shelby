@@ -17,7 +17,7 @@
     {% for row in rows %}
         <tr>
             {% for value in row %}
-            <td>{{value}}</td>
+            <td>{{value | safe}}</td>
             {% endfor %}
         </tr>
     {% endfor %}
