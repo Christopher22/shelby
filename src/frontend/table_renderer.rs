@@ -12,7 +12,7 @@ use super::Renderable;
 
 pub struct TableRenderer<const N: usize, T: RenderableDatabaseEntry<N>>(
     Vec<[String; N]>,
-    std::marker::PhantomData<*const T>,
+    Pagination<T>,
 );
 
 impl<const N: usize, T: RenderableDatabaseEntry<N>> Renderable for TableRenderer<N, T>
@@ -27,7 +27,9 @@ where
             title: &T::TITLE,
             headers: &T::COLUMNS,
             url_add: &T::URL_ADD,
-            rows: &self.0
+            rows: &self.0,
+            next_url: self.1.next(self.0.len()).map(|value| format!("{}{}", T::url(), value.display_url())),
+            previous_url: self.1.previous().map(|value| format!("{}{}", T::url(), value.display_url())),
         }
     }
 }
@@ -51,12 +53,21 @@ pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
         pagination: Pagination<Self>,
     ) -> Result<TableRenderer<N, Self>, crate::backend::database::Error> {
         Ok(TableRenderer(
-            Self::select_all_sorted(database, pagination)?
+            Self::select_all_sorted(database, pagination.clone())?
                 .into_iter()
                 .map(Self::generate_table_row)
                 .collect(),
-            std::marker::PhantomData,
+            pagination,
         ))
+    }
+
+    /// Extract the URL of this form.
+    /// By default, this assumes an URL_ADD ending with "/new."
+    fn url() -> &'static str {
+        match Self::URL_ADD.find("/new") {
+            Some(index) => &Self::URL_ADD[..index],
+            None => "",
+        }
     }
 }
 
@@ -110,5 +121,16 @@ impl RenderableDatabaseEntry<4> for User {
                 .map(|value| value.to_string())
                 .unwrap_or_default(),
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_url() {
+        // Check the URL for a single example.
+        assert_eq!(User::url(), "/users");
     }
 }

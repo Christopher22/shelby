@@ -6,16 +6,34 @@ use rocket::{
 use crate::backend::database::Selectable;
 
 /// A subsection of selection results.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromForm, Default)]
+#[derive(Debug, Copy, PartialEq, Eq)]
 pub struct Pagination<T: Selectable> {
-    #[field(default = 0)]
     pub offset: usize,
-    #[field(default = <Limit as Default>::default())]
     pub limit: Limit,
-    #[field(default = <Order as Default>::default())]
     pub order: Order,
-    #[field(default = <Column<T> as Default>::default())]
     pub column: Column<T>,
+}
+
+impl<T: Selectable> Clone for Pagination<T> {
+    fn clone(&self) -> Self {
+        Self {
+            offset: self.offset.clone(),
+            limit: self.limit.clone(),
+            order: self.order.clone(),
+            column: self.column.clone(),
+        }
+    }
+}
+
+impl<T: Selectable> Default for Pagination<T> {
+    fn default() -> Self {
+        Self {
+            offset: Default::default(),
+            limit: Default::default(),
+            order: Default::default(),
+            column: Default::default(),
+        }
+    }
 }
 
 impl<T: Selectable> Pagination<T> {
@@ -34,17 +52,66 @@ impl<T: Selectable> Pagination<T> {
         })
     }
 
+    /// Generate the next pagination element if there appears to be elements left.
+    pub fn next(&self, num_recieved_elements: usize) -> Option<Self> {
+        if num_recieved_elements < self.limit.0 {
+            return None;
+        }
+        let mut next_pagination = self.clone();
+        next_pagination.offset += self.limit.0;
+        Some(next_pagination)
+    }
+
+    /// Generate the previous pagination element.
+    pub fn previous(&self) -> Option<Self> {
+        if self.offset == 0 {
+            return None;
+        }
+        let mut last_pagination = self.clone();
+        last_pagination.offset = last_pagination
+            .offset
+            .saturating_sub(last_pagination.limit.0);
+        Some(last_pagination)
+    }
+
     pub fn end_offset(&self) -> usize {
         self.offset + self.limit.0
     }
+
+    /// Prepare creating a SQL string.
+    pub fn display_sql<'a>(&'a self) -> impl 'a + std::fmt::Display {
+        DisplaySql(self)
+    }
+
+    /// Prepare creating an URL string.
+    pub fn display_url<'a>(&'a self) -> impl 'a + std::fmt::Display {
+        DisplayUrl(self)
+    }
 }
 
-impl<T: Selectable> std::fmt::Display for Pagination<T> {
+struct DisplaySql<'a, T: Selectable>(&'a Pagination<T>);
+
+impl<'a, T: Selectable> std::fmt::Display for DisplaySql<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "ORDER BY {} {} LIMIT {} OFFSET {}",
-            self.column, self.order, self.limit, self.offset
+            self.0.column, self.0.order, self.0.limit, self.0.offset
+        )
+    }
+}
+
+struct DisplayUrl<'a, T: Selectable>(&'a Pagination<T>);
+
+impl<'a, T: Selectable> std::fmt::Display for DisplayUrl<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "?column={}&order={}&limit={}&offset={}",
+            self.0.column.as_str(),
+            self.0.order,
+            self.0.limit,
+            self.0.offset
         )
     }
 }
@@ -159,8 +226,15 @@ impl<'r> FromFormField<'r> for Order {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Copy, PartialEq, Eq)]
 pub struct Column<T: Selectable>(usize, std::marker::PhantomData<fn() -> T>);
+
+impl<T: Selectable> Column<T> {
+    /// Return the column name as a string.
+    pub fn as_str(&self) -> &'static str {
+        T::SORTABLE_COLUMNS[self.0]
+    }
+}
 
 impl<'a, T: Selectable> TryFrom<&'a str> for Column<T> {
     type Error = Error;
@@ -176,13 +250,19 @@ impl<'a, T: Selectable> TryFrom<&'a str> for Column<T> {
 
 impl<T: Selectable> std::fmt::Display for Column<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", T::SORTABLE_COLUMNS[self.0])
+        write!(f, "\"{}\"", self.as_str())
     }
 }
 
 impl<T: Selectable> Default for Column<T> {
     fn default() -> Self {
         Self(0, std::marker::PhantomData)
+    }
+}
+
+impl<T: Selectable> Clone for Column<T> {
+    fn clone(&self) -> Self {
+        Self(self.0, std::marker::PhantomData)
     }
 }
 
@@ -226,6 +306,7 @@ mod tests {
         assert_eq!(
             Pagination::<User>::new("id", 1, Limit::from(30), Order::Ascending)
                 .expect("valid pagination")
+                .display_sql()
                 .to_string(),
             String::from("ORDER BY \"id\" ASC LIMIT 30 OFFSET 1")
         );
@@ -239,5 +320,45 @@ mod tests {
     #[test]
     fn test_length_default() {
         assert_eq!(Limit::DEFAULT, <Limit as Default>::default());
+    }
+
+    #[test]
+    fn test_next() {
+        let pagination = Pagination::<User> {
+            offset: 0,
+            limit: Limit::from(3),
+            ..Default::default()
+        };
+
+        // Lets simulate 5 existings elements in database
+        let next_pagination = pagination.next(3).expect("valid pagination");
+        assert_eq!(next_pagination.offset, 3);
+        assert_eq!(pagination.next(2), None);
+    }
+
+    #[test]
+    fn test_next_pathologic() {
+        let pagination = Pagination::<User> {
+            offset: 0,
+            limit: Limit::from(3),
+            ..Default::default()
+        };
+
+        // Lets simulate 5 existings elements in database - however, we received more elements than we would expect given the limit.
+        let next_pagination = pagination.next(4).expect("valid pagination");
+        assert_eq!(next_pagination.offset, 3);
+        assert_eq!(pagination.next(2), None);
+    }
+
+    #[test]
+    fn test_previous() {
+        let pagination = Pagination::<User> {
+            offset: 0,
+            limit: Limit::from(3),
+            ..Default::default()
+        };
+
+        let next_pagination = pagination.next(5).expect("valid pagination");
+        assert_eq!(next_pagination.previous(), Some(pagination));
     }
 }

@@ -113,7 +113,7 @@ pub trait Selectable: DatabaseEntry + Indexable {
         database: &Database,
         selection: Pagination<Self>,
     ) -> Result<Vec<Self::Output>, Error> {
-        let statement = format!("{} {}", Self::STATEMENT_SELECT_ALL, selection);
+        let statement = format!("{} {}", Self::STATEMENT_SELECT_ALL, selection.display_sql());
         let mut stmt = database.connection.prepare(&statement)?;
         let iterator = stmt.query_map((), |row| {
             Self::SelectValue::try_from(row).map(Self::deserialize_sql)
