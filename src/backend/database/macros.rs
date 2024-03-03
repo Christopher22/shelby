@@ -194,7 +194,7 @@ mod test {
             Database, DatabaseEntry, Insertable, PrimaryKey, Record, Selectable,
             SelectableByPrimaryKey,
         },
-        Length, Order, Pagination,
+        Limit, Order, Pagination,
     };
 
     crate::backend::database::make_struct!(
@@ -347,7 +347,7 @@ mod test {
 
     #[test]
     fn test_sorted_select_asc() {
-        let pagination = Pagination::new("integer_value", 0, Length::from(5), Order::Ascending)
+        let pagination = Pagination::new("integer_value", 0, Limit::from(5), Order::Ascending)
             .expect("valid pagination");
 
         assert_eq!(generate_pagination_data(pagination), vec![42, 43, 44]);
@@ -355,7 +355,7 @@ mod test {
 
     #[test]
     fn test_sorted_select_desc() {
-        let pagination = Pagination::new("integer_value", 0, Length::from(5), Order::Descending)
+        let pagination = Pagination::new("integer_value", 0, Limit::from(5), Order::Descending)
             .expect("valid pagination");
 
         assert_eq!(generate_pagination_data(pagination), vec![44, 43, 42]);
@@ -363,7 +363,7 @@ mod test {
 
     #[test]
     fn test_sorted_select_desc_offset() {
-        let pagination = Pagination::new("integer_value", 1, Length::from(5), Order::Descending)
+        let pagination = Pagination::new("integer_value", 1, Limit::from(5), Order::Descending)
             .expect("valid pagination");
 
         assert_eq!(generate_pagination_data(pagination), vec![43, 42]);
@@ -371,7 +371,7 @@ mod test {
 
     #[test]
     fn test_sorted_select_desc_offset_and_limit() {
-        let pagination = Pagination::new("integer_value", 0, Length::from(2), Order::Descending)
+        let pagination = Pagination::new("integer_value", 0, Limit::from(2), Order::Descending)
             .expect("valid pagination");
 
         assert_eq!(generate_pagination_data(pagination), vec![44, 43]);

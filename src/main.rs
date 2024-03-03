@@ -12,15 +12,21 @@ mod error;
 mod frontend;
 mod util;
 
-use self::backend::database::{
-    Database, DefaultGenerator, Insertable, PrimaryKey, SelectableByPrimaryKey,
+use rocket::{
+    data::{Limits, ToByteUnit},
+    form::Strict,
+    fs::NamedFile,
+    serde::json::Json,
+    State,
 };
-use auth::{login, logout, AuthenticatedUser};
-use rocket::data::{Limits, ToByteUnit};
-use rocket::{fs::NamedFile, serde::json::Json, State};
 use rocket_dyn_templates::{context, Template};
 use std::path::PathBuf;
 
+use self::auth::{login, logout, AuthenticatedUser};
+use self::backend::{
+    database::{Database, DefaultGenerator, Insertable, PrimaryKey, SelectableByPrimaryKey},
+    Pagination,
+};
 pub use self::frontend::{InsertableDatabaseEntry, Renderable, RenderableDatabaseEntry};
 pub use self::util::{FlexibleInput, PdfOutput};
 pub use self::{config::Config, error::Error};
@@ -28,9 +34,10 @@ pub use self::{config::Config, error::Error};
 macro_rules! create_routes {
     ($database_entry: ty {
         module: $function_name: ident,
-        url: $path: literal,
-        get: $path_id: literal,
-        post: $path_add: literal
+        add_json: $path: literal,
+        add_frontend: $path_add: literal,
+        get_single: $path_id: literal,
+        get_multiple: $path_multiple: literal
     }) => {
         mod $function_name {
             use crate::backend::database::{Insertable, Selectable};
@@ -64,19 +71,36 @@ macro_rules! create_routes {
                 DatabaseEntry::prepare_rendering($path, user).render()
             }
 
-            #[get($path, rank = 3)]
+            #[get($path_multiple, rank = 3)]
             pub fn get_all(
                 _user: AuthenticatedUser,
                 state: &State<Config>,
                 content_type: Option<&rocket::http::ContentType>,
+
+                limit: Option<crate::backend::Limit>,
+                offset: Option<usize>,
+                order: Option<crate::backend::Order>,
             ) -> Result<Result<Template, Json<Vec<<DatabaseEntry as Selectable>::Output>>>, Error>
             {
+                // For some reason, putting pagination directly does not work. We generate it manually.
+                let pagination = Pagination {
+                    limit: limit.unwrap_or_default(),
+                    column: crate::backend::Column::default(),
+                    order: order.unwrap_or_default(),
+                    offset: offset.unwrap_or(0),
+                };
                 let database = &state.database();
+
                 Ok(match content_type {
                     Some(value) if value.0.is_json() => {
-                        Err(Json(<$database_entry>::select_all(&database)?))
+                        Err(Json(<$database_entry>::select_all_sorted(
+                            &database, pagination, /*.into_inner()*/
+                        )?))
                     }
-                    _ => Ok(<$database_entry>::prepare_rendering_all(&database)?.render()),
+                    _ => Ok(<$database_entry>::prepare_rendering_all(
+                        &database, pagination, //.into_inner(),
+                    )?
+                    .render()),
                 })
             }
 
@@ -94,13 +118,35 @@ macro_rules! create_routes {
 
             #[cfg(test)]
             mod tests {
-                use crate::backend::database::{DefaultGenerator, PrimaryKey, Record, Selectable};
+                use crate::backend::database::{
+                    DefaultGenerator, Insertable, PrimaryKey, Record, Selectable,
+                };
                 use crate::frontend::RenderableDatabaseEntry;
                 use crate::{rocket, Config};
                 use rocket::{http::Status, local::blocking::Client, serde::json, State};
 
                 use super::DatabaseEntry as TargetEntity;
                 const ACCESS_POINT: &'static str = $path;
+
+                fn load_json(
+                    client: &rocket::local::blocking::Client,
+                    url: impl AsRef<str>,
+                ) -> Vec<<TargetEntity as Selectable>::Output> {
+                    let response = client
+                        .get(url.as_ref())
+                        .header(rocket::http::ContentType::JSON)
+                        .dispatch();
+                    assert_eq!(response.status(), Status::Ok);
+                    assert_eq!(
+                        response.content_type(),
+                        Some(rocket::http::ContentType::JSON)
+                    );
+
+                    // Why does this fail?
+                    // let response_json: Vec<Record<TargetEntity>> = response.into_json().expect("valid json");
+                    let response = response.into_string().expect("valid str");
+                    json::from_str(&response).expect("valid json")
+                }
 
                 #[test]
                 fn test_get_empty() {
@@ -183,22 +229,80 @@ macro_rules! create_routes {
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
                     assert_eq!(creation_response.status(), Status::Created);
 
-                    let response = client
-                        .get(ACCESS_POINT)
-                        .header(rocket::http::ContentType::JSON)
-                        .dispatch();
-                    assert_eq!(response.status(), Status::Ok);
-                    assert_eq!(
-                        response.content_type(),
-                        Some(rocket::http::ContentType::JSON)
-                    );
-
-                    // Why does this fail?
-                    // let response_json: Vec<Record<TargetEntity>> = response.into_json().expect("valid json");
-                    let response = response.into_string().expect("valid str");
-                    let response_json: Vec<<TargetEntity as Selectable>::Output> =
-                        json::from_str(&response).expect("valid json");
+                    let response_json = load_json(&client, ACCESS_POINT);
                     assert_eq!(response_json.len(), num_elements + 1);
+                }
+
+                #[test]
+                fn test_get_all_json_limit() {
+                    let client = {
+                        let engine = rocket();
+                        let state: &State<Config> = State::get(&engine).expect("valid database");
+
+                        // Insert some entities
+                        for _ in 0..4 {
+                            let database = &state.database();
+                            TargetEntity::create_default(database)
+                                .insert(database)
+                                .expect("valid insert");
+                        }
+
+                        crate::tests::login(engine)
+                    };
+
+                    let response_json = load_json(&client, format!("{}?limit=1", ACCESS_POINT));
+                    assert_eq!(response_json.len(), 1);
+                }
+
+                #[test]
+                fn test_get_all_json_order() {
+                    let client = {
+                        let engine = rocket();
+                        let state: &State<Config> = State::get(&engine).expect("valid database");
+
+                        // Insert some entities
+                        for _ in 0..4 {
+                            let database = &state.database();
+                            TargetEntity::create_default(database)
+                                .insert(database)
+                                .expect("valid insert");
+                        }
+
+                        crate::tests::login(engine)
+                    };
+
+                    let mut results = Vec::new();
+                    for value in ["asc", "desc"] {
+                        results.push(load_json(
+                            &client,
+                            format!("{}?order={}&limit=1", ACCESS_POINT, value),
+                        ));
+                    }
+
+                    assert_ne!(results[0], results[1]);
+                }
+
+                #[test]
+                fn test_get_all_json_offset() {
+                    let client = {
+                        let engine = rocket();
+                        let state: &State<Config> = State::get(&engine).expect("valid database");
+
+                        // Insert some entities
+                        for _ in 0..4 {
+                            let database = &state.database();
+                            TargetEntity::create_default(database)
+                                .insert(database)
+                                .expect("valid insert");
+                        }
+
+                        crate::tests::login(engine)
+                    };
+
+                    let response_all = load_json(&client, ACCESS_POINT);
+                    let response_offset = load_json(&client, format!("{}?offset=1", ACCESS_POINT));
+                    assert_eq!(response_all.len() - 1, response_offset.len());
+                    assert_eq!(&response_all[1..], &response_offset);
                 }
 
                 #[test]
@@ -328,23 +432,26 @@ async fn error_handler(
 
 create_routes!(crate::backend::person::Person {
     module: person,
-    url: "/persons",
-    get: "/persons/<id>",
-    post: "/persons/new"
+    add_json: "/persons",
+    add_frontend: "/persons/new",
+    get_single: "/persons/<id>",
+    get_multiple: "/persons?<limit>&<offset>&<order>"
 });
 
 create_routes!(crate::backend::person::Group {
     module: group,
-    url: "/groups",
-    get: "/groups/<id>",
-    post: "/groups/new"
+    add_json: "/groups",
+    add_frontend: "/groups/new",
+    get_single: "/groups/<id>",
+    get_multiple: "/groups?<limit>&<offset>&<order>"
 });
 
 create_routes!(crate::backend::document::Document {
     module: document,
-    url: "/documents",
-    get: "/documents/<id>",
-    post: "/documents/new"
+    add_json: "/documents",
+    add_frontend: "/documents/new",
+    get_single: "/documents/<id>",
+    get_multiple: "/documents?<limit>&<offset>&<order>"
 });
 
 #[get("/documents/<id>/pdf")]
@@ -358,9 +465,10 @@ async fn download_document(
 
 create_routes!(crate::backend::user::User {
     module: user,
-    url: "/users",
-    get: "/users/<id>",
-    post: "/users/new"
+    add_json: "/users",
+    add_frontend: "/users/new",
+    get_single: "/users/<id>",
+    get_multiple: "/users?<limit>&<offset>&<order>"
 });
 
 #[launch]

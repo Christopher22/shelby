@@ -3,6 +3,7 @@ use crate::backend::{
     document::Document,
     person::{Group, Person},
     user::User,
+    Pagination,
 };
 use rocket::serde::Serialize;
 use rocket_dyn_templates::context;
@@ -47,9 +48,10 @@ pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
     /// Create a list for rendering all elements.
     fn prepare_rendering_all(
         database: &Database,
+        pagination: Pagination<Self>,
     ) -> Result<TableRenderer<N, Self>, crate::backend::database::Error> {
         Ok(TableRenderer(
-            Self::select_all(database)?
+            Self::select_all_sorted(database, pagination)?
                 .into_iter()
                 .map(Self::generate_table_row)
                 .collect(),

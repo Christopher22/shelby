@@ -1,39 +1,41 @@
+use rocket::{
+    data::ToByteUnit,
+    form::{self, DataField, Errors, FromFormField, ValueField},
+};
+
 use crate::backend::database::Selectable;
 
 /// A subsection of selection results.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Pagination<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromForm, Default)]
+pub struct Pagination<T: Selectable> {
+    #[field(default = 0)]
     pub offset: usize,
-    pub length: Length,
+    #[field(default = <Limit as Default>::default())]
+    pub limit: Limit,
+    #[field(default = <Order as Default>::default())]
     pub order: Order,
-    column_index: usize,
-    selectable: std::marker::PhantomData<*const T>,
+    #[field(default = <Column<T> as Default>::default())]
+    pub column: Column<T>,
 }
 
 impl<T: Selectable> Pagination<T> {
     pub fn new(
         column: impl AsRef<str>,
         offset: usize,
-        length: Length,
+        limit: Limit,
         order: Order,
     ) -> Result<Self, Error> {
-        let column = column.as_ref();
-        let column_index = T::SORTABLE_COLUMNS
-            .iter()
-            .position(|&r| r == column)
-            .ok_or(Error::InvalidColumn)?;
-
+        let column = Column::try_from(column.as_ref())?;
         Ok(Pagination {
             offset,
-            length,
+            limit,
             order,
-            column_index,
-            selectable: std::marker::PhantomData,
+            column,
         })
     }
 
     pub fn end_offset(&self) -> usize {
-        self.offset + self.length.0
+        self.offset + self.limit.0
     }
 }
 
@@ -41,51 +43,59 @@ impl<T: Selectable> std::fmt::Display for Pagination<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ORDER BY \"{}\" {} LIMIT {} OFFSET {}",
-            T::SORTABLE_COLUMNS[self.column_index],
-            self.order,
-            self.length,
-            self.offset
+            "ORDER BY {} {} LIMIT {} OFFSET {}",
+            self.column, self.order, self.limit, self.offset
         )
     }
 }
 
 /// The number of samples within the pagination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Length(usize);
+pub struct Limit(usize);
 
-impl Length {
-    pub const DEFAULT: Length = Length(5);
-    pub const MAXIMUM: Length = Length(100);
+impl Limit {
+    pub const DEFAULT: Limit = Limit(10);
+    pub const MAXIMUM: Limit = Limit(100);
 }
 
-impl From<usize> for Length {
+impl From<usize> for Limit {
     fn from(value: usize) -> Self {
-        std::cmp::min(Length(value), Self::MAXIMUM)
+        std::cmp::min(Limit(value), Self::MAXIMUM)
     }
 }
 
-impl From<Length> for usize {
-    fn from(value: Length) -> Self {
+impl From<Limit> for usize {
+    fn from(value: Limit) -> Self {
         value.0
     }
 }
 
-impl Default for Length {
+impl Default for Limit {
     fn default() -> Self {
         Self::DEFAULT
     }
 }
 
-impl std::fmt::Display for Length {
+impl std::fmt::Display for Limit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl PartialEq<usize> for Length {
+impl PartialEq<usize> for Limit {
     fn eq(&self, other: &usize) -> bool {
         self.0 == *other
+    }
+}
+
+#[rocket::async_trait]
+impl<'r> FromFormField<'r> for Limit {
+    fn from_value(field: ValueField<'r>) -> form::Result<'r, Self> {
+        usize::from_value(field).map(Limit::from)
+    }
+
+    async fn from_data(field: DataField<'r, '_>) -> form::Result<'r, Self> {
+        usize::from_data(field).await.map(Limit::from)
     }
 }
 
@@ -122,6 +132,74 @@ impl std::fmt::Display for Order {
     }
 }
 
+impl Default for Order {
+    fn default() -> Self {
+        Self::Descending
+    }
+}
+
+#[rocket::async_trait]
+impl<'r> FromFormField<'r> for Order {
+    fn from_value(field: ValueField<'r>) -> form::Result<'r, Self> {
+        match field.value {
+            value if value.eq_ignore_ascii_case("asc") => Ok(Order::Ascending),
+            value if value.eq_ignore_ascii_case("desc") => Ok(Order::Descending),
+            _ => Err(Errors::new().with_name(field.name)),
+        }
+    }
+
+    async fn from_data(field: DataField<'r, '_>) -> form::Result<'r, Self> {
+        String::from_data(field)
+            .await
+            .and_then(|value| match value {
+                value if value.eq_ignore_ascii_case("asc") => Ok(Order::Ascending),
+                value if value.eq_ignore_ascii_case("desc") => Ok(Order::Descending),
+                _ => Err(Errors::new()),
+            })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Column<T: Selectable>(usize, std::marker::PhantomData<fn() -> T>);
+
+impl<'a, T: Selectable> TryFrom<&'a str> for Column<T> {
+    type Error = Error;
+
+    fn try_from(column: &str) -> Result<Self, Self::Error> {
+        T::SORTABLE_COLUMNS
+            .iter()
+            .position(|&r| r == column)
+            .ok_or(Error::InvalidColumn)
+            .map(|value| Column(value, std::marker::PhantomData))
+    }
+}
+
+impl<T: Selectable> std::fmt::Display for Column<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", T::SORTABLE_COLUMNS[self.0])
+    }
+}
+
+impl<T: Selectable> Default for Column<T> {
+    fn default() -> Self {
+        Self(0, std::marker::PhantomData)
+    }
+}
+
+#[rocket::async_trait]
+impl<'r, T: Selectable> FromFormField<'r> for Column<T> {
+    fn from_value(field: ValueField<'r>) -> form::Result<'r, Self> {
+        String::from_value(field)
+            .and_then(|value| Column::try_from(value.as_str()).map_err(|_| Errors::new()))
+    }
+
+    async fn from_data(field: DataField<'r, '_>) -> form::Result<'r, Self> {
+        String::from_data(field)
+            .await
+            .and_then(|value| Column::try_from(value.as_str()).map_err(|_| Errors::new()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,15 +208,15 @@ mod tests {
     #[test]
     fn test_pagination_new() {
         let pagination: Pagination<User> =
-            Pagination::new("id", 1, Length::DEFAULT, Order::Ascending).expect("valid pagination");
+            Pagination::new("id", 1, Limit::DEFAULT, Order::Ascending).expect("valid pagination");
         assert_eq!(pagination.offset, 1);
-        assert_eq!(pagination.length, Length::DEFAULT);
+        assert_eq!(pagination.limit, Limit::DEFAULT);
     }
 
     #[test]
     fn test_pagination_new_unknown_column() {
         assert_eq!(
-            Pagination::<User>::new("unknown_column", 1, Length::DEFAULT, Order::Ascending),
+            Pagination::<User>::new("unknown_column", 1, Limit::DEFAULT, Order::Ascending),
             Err(Error::InvalidColumn)
         );
     }
@@ -146,7 +224,7 @@ mod tests {
     #[test]
     fn test_sql() {
         assert_eq!(
-            Pagination::<User>::new("id", 1, Length::from(30), Order::Ascending)
+            Pagination::<User>::new("id", 1, Limit::from(30), Order::Ascending)
                 .expect("valid pagination")
                 .to_string(),
             String::from("ORDER BY \"id\" ASC LIMIT 30 OFFSET 1")
@@ -155,11 +233,11 @@ mod tests {
 
     #[test]
     fn test_length_max_size() {
-        assert_eq!(Length::from(Length::MAXIMUM.0 + 100), Length::MAXIMUM);
+        assert_eq!(Limit::from(Limit::MAXIMUM.0 + 100), Limit::MAXIMUM);
     }
 
     #[test]
     fn test_length_default() {
-        assert_eq!(Length::DEFAULT, Length::default());
+        assert_eq!(Limit::DEFAULT, <Limit as Default>::default());
     }
 }
