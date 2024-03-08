@@ -55,10 +55,50 @@ macro_rules! impl_select {
     };
 }
 
+macro_rules! impl_referenceable {
+    () => {};
+    ($name: ident => $value: expr) => {
+        impl crate::backend::database::Referenceable for $name {
+            const STATEMENT_SELECT_NAME: &'static str = const_format::concatcp!(
+                "SELECT id, ",
+                $value,
+                " FROM ",
+                <$name as crate::backend::database::DatabaseEntry>::TABLE_NAME
+            );
+        }
+    };
+    ($name: ident => $value: expr; testing) => {
+        // Primarily here for enabling this conditionally.
+        const _DESCRIPTOR: &'static str = $value;
+
+        #[test]
+        fn test_select_primary_key_description_empty() {
+            let database = crate::backend::database::Database::plain().expect("valid database");
+            $name::create_table(&database).expect("valid table");
+
+            let descriptions = $name::generate_descriptions(&database).expect("valid descriptions");
+            assert_eq!(descriptions.len(), 0);
+        }
+
+        #[test]
+        fn test_select_primary_key_description() {
+            let database = crate::backend::database::Database::plain().expect("valid database");
+            $name::create_table(&database).expect("valid table");
+
+            let example = $name::create_default(&database);
+            let record = example.insert_record(&database).expect("insert sucessfull");
+
+            let descriptions = $name::generate_descriptions(&database).expect("valid descriptions");
+            assert_eq!(descriptions.len(), 1);
+            assert_eq!(descriptions[0].0, record.identifier);
+        }
+    };
+}
+
 #[cfg(test)]
 macro_rules! impl_select_test {
-    (true, $name: ident) => {
-        use crate::backend::database::{Selectable, SelectableByPrimaryKey};
+    (true, $name: ident $(,$foreign_key_descriptor: expr)?) => {
+        use crate::backend::database::{Referenceable, Selectable, SelectableByPrimaryKey};
 
         #[test]
         fn test_select_automatically() {
@@ -129,7 +169,7 @@ macro_rules! make_struct {(
     $(#[derive($( $derived: ty ),+)] )?
     #[table($table_name: expr)]
     #[dependencies( $dependencies: ty )]
-    #[impl_select($should_impl: expr, testing: $should_impl_text: expr)]
+    #[impl_select($should_impl: expr, testing: $should_impl_text: expr $(, description: $foreign_key_descriptor: expr)?)]
     $name: ident { $( $(#[$os_attr: meta])? $element: ident: $ty: ty),* } $( ($additional_conditions: expr) )?
 ) => {
     paste::paste! {
@@ -164,6 +204,10 @@ macro_rules! make_struct {(
 
         crate::backend::database::impl_select!($should_impl, $name, $table_name, $($element: $ty),*);
 
+        crate::backend::database::impl_referenceable!($(
+            $name => $foreign_key_descriptor
+        )?);
+
         #[cfg(test)]
         mod [< "test_" $table_name >] {
             use crate::backend::database::{DatabaseEntry, Insertable, DefaultGenerator};
@@ -177,10 +221,15 @@ macro_rules! make_struct {(
             }
 
             crate::backend::database::impl_select_test!($should_impl_text, $name);
+
+            crate::backend::database::impl_referenceable!($(
+                $name => $foreign_key_descriptor; testing
+            )?);
         }
     }
 }}
 
+pub(crate) use impl_referenceable;
 pub(crate) use impl_select;
 #[cfg(test)]
 pub(crate) use impl_select_test;
@@ -201,7 +250,7 @@ mod test {
         #[derive(Default, serde::Serialize, serde::Deserialize)]
         #[table("tests")]
         #[dependencies(())]
-        #[impl_select(true, testing: true)]
+        #[impl_select(true, testing: true, description: "string_value")]
         Test {
             bool_value: bool,
             string_value: String,

@@ -14,7 +14,7 @@ crate::backend::database::make_struct!(
     #[derive(Serialize)]
     #[table("users")]
     #[dependencies(Person)]
-    #[impl_select(false, testing: true)]
+    #[impl_select(false, testing: true, description: "username")]
     User {
         username: String,
         password_hash: PasswordHash,

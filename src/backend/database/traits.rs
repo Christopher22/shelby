@@ -147,6 +147,20 @@ pub trait SelectableByPrimaryKey: Selectable + Indexable {
     }
 }
 
+/// A element which is referencable as a foreign key. Beside the primary key, it contains a desccription.
+pub trait Referenceable: SelectableByPrimaryKey {
+    const STATEMENT_SELECT_NAME: &'static str;
+
+    /// Generate all descriptions.
+    fn generate_descriptions(
+        database: &Database,
+    ) -> Result<Vec<(PrimaryKey<Self>, String)>, Error> {
+        let mut stmt = database.connection.prepare(Self::STATEMENT_SELECT_NAME)?;
+        let iterator = stmt.query_map((), |row| <(PrimaryKey<Self>, String)>::try_from(row))?;
+        Ok(iterator.filter_map(|value| value.ok()).collect())
+    }
+}
+
 /// An trait for creating a default for objects with complex constraints like foreign keys requiering database access.
 pub trait DefaultGenerator {
     /// Create the default element.
