@@ -3,6 +3,7 @@ use rocket_dyn_templates::Template;
 
 mod form_renderer;
 mod table_renderer;
+mod util;
 
 #[cfg(test)]
 mod tests;

@@ -1,6 +1,5 @@
 mod field;
 mod insertable_database_entry;
-mod util;
 
 use std::collections::HashMap;
 
@@ -9,7 +8,7 @@ use rocket::serde::{Serialize, Serializer};
 
 pub use self::field::*;
 pub use self::insertable_database_entry::*;
-pub use self::util::*;
+pub use super::util::ForeignKeyStorage;
 
 use super::Renderable;
 use crate::auth::AuthenticatedUser;

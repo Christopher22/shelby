@@ -11,6 +11,8 @@ use rocket_dyn_templates::context;
 
 use super::Renderable;
 
+type ForeignKeyStorage<'a> = super::util::ForeignKeyStorage<'a, super::util::Map>;
+
 pub struct TableRenderer<const N: usize, T: RenderableDatabaseEntry<N>>(
     Vec<[String; N]>,
     Pagination<T>,
@@ -45,18 +47,29 @@ pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
     /// The path to the form to create a new element.
     const URL_ADD: &'static str;
 
+    /// Load required foreign keys before generating the rows.
+    fn load_required_foreign_keys(
+        _: &mut ForeignKeyStorage<'_>,
+    ) -> Result<(), crate::backend::database::Error> {
+        Ok(())
+    }
+
     /// Translate a record into a row of strings.
-    fn generate_table_row(entry: Self::Output) -> [String; N];
+    fn generate_table_row(entry: Self::Output, foreign_keys: &ForeignKeyStorage<'_>)
+        -> [String; N];
 
     /// Create a list for rendering all elements.
     fn prepare_rendering_all(
         database: &Database,
         pagination: Pagination<Self>,
     ) -> Result<TableRenderer<N, Self>, crate::backend::database::Error> {
+        let mut foreign_keys = ForeignKeyStorage::from(database);
+
+        Self::load_required_foreign_keys(&mut foreign_keys)?;
         Ok(TableRenderer(
             Self::select_all_sorted(database, pagination.clone())?
                 .into_iter()
-                .map(Self::generate_table_row)
+                .map(|value| Self::generate_table_row(value, &foreign_keys))
                 .collect(),
             pagination,
         ))
@@ -77,19 +90,19 @@ impl RenderableDatabaseEntry<3> for Person {
     const COLUMNS: [&'static str; 3] = ["Name", "Address", "E-Mail"];
     const URL_ADD: &'static str = "/persons/new";
 
-    fn generate_table_row(entry: Record<Self>) -> [String; 3] {
+    fn generate_table_row(entry: Record<Self>, _: &ForeignKeyStorage<'_>) -> [String; 3] {
         let value = entry.value;
         [value.name, value.address, value.email.unwrap_or_default()]
     }
 }
 
-impl RenderableDatabaseEntry<2> for Group {
+impl RenderableDatabaseEntry<1> for Group {
     const TITLE: &'static str = "Groups";
-    const COLUMNS: [&'static str; 2] = ["Group", "Description"];
+    const COLUMNS: [&'static str; 1] = ["Description"];
     const URL_ADD: &'static str = "/groups/new";
 
-    fn generate_table_row(group: Record<Self>) -> [String; 2] {
-        [group.identifier.to_string(), group.value.description]
+    fn generate_table_row(group: Record<Self>, _: &ForeignKeyStorage<'_>) -> [String; 1] {
+        [group.value.description]
     }
 }
 
@@ -99,13 +112,28 @@ impl RenderableDatabaseEntry<6> for Document {
         ["File", "Recieved", "Processed", "From", "To", "Description"];
     const URL_ADD: &'static str = "/documents/new";
 
-    fn generate_table_row(document: <Document as Selectable>::Output) -> [String; 6] {
+    fn load_required_foreign_keys(
+        foreign_key_storage: &mut ForeignKeyStorage<'_>,
+    ) -> Result<(), crate::backend::database::Error> {
+        foreign_key_storage.add::<Person>()
+    }
+
+    fn generate_table_row(
+        document: <Document as Selectable>::Output,
+        foreign_keys: &ForeignKeyStorage<'_>,
+    ) -> [String; 6] {
         [
             format!("<a href=\"{}/pdf\">PDF</a>", document.identifier),
             document.recieved.to_string(),
             document.processed.to_string(),
-            document.from_person.to_string(),
-            document.to_person.to_string(),
+            foreign_keys
+                .get(document.from_person)
+                .map(String::from)
+                .unwrap_or_else(|| document.from_person.to_string()),
+            foreign_keys
+                .get(document.to_person)
+                .map(String::from)
+                .unwrap_or_else(|| document.from_person.to_string()),
             document.description.unwrap_or_default(),
         ]
     }
@@ -116,12 +144,21 @@ impl RenderableDatabaseEntry<3> for User {
     const COLUMNS: [&'static str; 3] = ["Name", "Creation date", "Used by"];
     const URL_ADD: &'static str = "/users/new";
 
-    fn generate_table_row(user: <User as Selectable>::Output) -> [String; 3] {
+    fn load_required_foreign_keys(
+        foreign_key_storage: &mut ForeignKeyStorage<'_>,
+    ) -> Result<(), crate::backend::database::Error> {
+        foreign_key_storage.add::<Person>()
+    }
+
+    fn generate_table_row(
+        user: <User as Selectable>::Output,
+        foreign_keys: &ForeignKeyStorage<'_>,
+    ) -> [String; 3] {
         [
             user.username.to_string(),
             user.creation_date.to_string(),
             user.related_to
-                .map(|value| value.to_string())
+                .and_then(|value| foreign_keys.get(value).map(String::from))
                 .unwrap_or_default(),
         ]
     }
@@ -132,7 +169,7 @@ impl RenderableDatabaseEntry<1> for crate::backend::accounting::Category {
     const COLUMNS: [&'static str; 1] = ["Description"];
     const URL_ADD: &'static str = "/categories/new";
 
-    fn generate_table_row(category: Record<Self>) -> [String; 1] {
+    fn generate_table_row(category: Record<Self>, _: &ForeignKeyStorage<'_>) -> [String; 1] {
         [category.value.description]
     }
 }
@@ -142,7 +179,7 @@ impl RenderableDatabaseEntry<1> for crate::backend::accounting::CostCenter {
     const COLUMNS: [&'static str; 1] = ["Description"];
     const URL_ADD: &'static str = "/cost_centers/new";
 
-    fn generate_table_row(cost_center: Record<Self>) -> [String; 1] {
+    fn generate_table_row(cost_center: Record<Self>, _: &ForeignKeyStorage<'_>) -> [String; 1] {
         [cost_center.value.description]
     }
 }
@@ -152,10 +189,22 @@ impl RenderableDatabaseEntry<3> for crate::backend::accounting::Account {
     const COLUMNS: [&'static str; 3] = ["Code", "Category", "Description"];
     const URL_ADD: &'static str = "/accounts/new";
 
-    fn generate_table_row(account: Record<Self>) -> [String; 3] {
+    fn load_required_foreign_keys(
+        foreign_key_storage: &mut ForeignKeyStorage<'_>,
+    ) -> Result<(), crate::backend::database::Error> {
+        foreign_key_storage.add::<Category>()
+    }
+
+    fn generate_table_row(
+        account: Record<Self>,
+        foreign_keys: &ForeignKeyStorage<'_>,
+    ) -> [String; 3] {
         [
             account.value.code.to_string(),
-            account.value.category.to_string(),
+            foreign_keys
+                .get(account.value.category)
+                .map(String::from)
+                .unwrap_or_else(|| account.category.to_string()),
             account.value.description,
         ]
     }
