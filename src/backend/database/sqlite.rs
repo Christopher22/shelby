@@ -7,6 +7,12 @@ pub struct Database {
     pub(crate) connection: Connection,
 }
 
+impl std::fmt::Debug for Database {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Database").finish_non_exhaustive()
+    }
+}
+
 impl Database {
     /// Open the database in memory.
     pub fn in_memory() -> Result<Self, Error> {
