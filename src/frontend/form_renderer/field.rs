@@ -33,6 +33,7 @@ impl<'a, 'b> Serialize for Field {
 
         let mut result = match &self.input_type {
             InputType::Text(meta)
+            | InputType::Number(meta)
             | InputType::Email(meta)
             | InputType::Date(meta)
             | InputType::Password(meta) => {
@@ -78,6 +79,7 @@ impl<'a, 'b> Serialize for Field {
 pub enum InputType {
     Text(Metadata),
     Email(Metadata),
+    Number(Metadata),
     Password(Metadata),
     Date(Metadata),
     File(FileMetadata),
@@ -99,6 +101,7 @@ impl InputType {
     const fn html_value(&self) -> &'static str {
         match self {
             InputType::Text(_) => "text",
+            InputType::Number(_) => "number",
             InputType::ForeignKey(_) => "select",
             InputType::Password(_) => "password",
             InputType::Email(_) => "email",
