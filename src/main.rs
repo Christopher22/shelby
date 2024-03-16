@@ -20,6 +20,7 @@ use rocket::{
     State,
 };
 use rocket_dyn_templates::{context, Template};
+use std::ops::Deref;
 use std::path::PathBuf;
 
 use self::auth::{login, logout, AuthenticatedUser};
@@ -70,8 +71,9 @@ macro_rules! create_routes {
             }
 
             #[get($path_add, rank = 2)]
-            pub fn add_frontend(user: AuthenticatedUser) -> Template {
-                DatabaseEntry::prepare_rendering($path, user).render()
+            pub fn add_frontend(user: AuthenticatedUser, state: &State<Config>) -> Template {
+                let database_entry = state.database();
+                DatabaseEntry::prepare_rendering($path, database_entry.deref(), user).render()
             }
 
             #[get($path_multiple, rank = 3)]

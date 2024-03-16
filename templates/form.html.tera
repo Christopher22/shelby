@@ -10,9 +10,15 @@
         <label for="{{field.name}}" class="form-label">{{field.label}}</label>
         <div class="input-group has-validation">
         {% if field.input_type == "file" %}
-        <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" accept="{{field.accept}}" multiple="{{field.multiple}}" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
+        <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" accept="{{field.accept}}" multiple="{{field.multiple}}" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} />
+        {% elif field.input_type == "select" %}
+        <select id="{{field.name}}" name="{{field.name}}" class="form-control" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
+        {% for value in foreign_keys[field.foreign_keys] %}
+            <option value="{{value.0 | safe}}">{{value.1}}</option>
+        {% endfor %}
+        </select>
         {% else %}
-        <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" placeholder="{{field.placeholder}}" {% if field.required == true %} required {% endif %} {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
+        <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" placeholder="{{field.placeholder}}" {% if field.required == true %} required {% endif %} {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} />
         {% endif %}
         <div class="invalid-feedback">
             Valus is required.
@@ -88,9 +94,9 @@ document.addEventListener("DOMContentLoaded", function() {
               value = parseInt(value);
             } else if (input_element.type === 'hidden') {
               // Translate hidden booleans
-              if (value === "true") {
+              if (value == "true") {
                 value = true;
-              } else if (value === "false") {
+              } else if (value == "false") {
                 value = false;
               }
             }
@@ -127,6 +133,7 @@ document.addEventListener("DOMContentLoaded", function() {
         if("{{method}}" === "application&#x2F;json") {
           xhr.setRequestHeader('Content-Type', 'application/json');
           // Supported in Supported in Chrome 73+, Firefox 63+, Safari 12.1
+          // TODO: Check why boolean values are serialized as text
           dataToSend = JSON.stringify(Object.fromEntries(dataToSend));
         } 
         xhr.send(dataToSend);

@@ -4,7 +4,10 @@ use rocket_dyn_templates::Template;
 mod form_renderer;
 mod table_renderer;
 
-pub use self::form_renderer::InsertableDatabaseEntry;
+#[cfg(test)]
+mod tests;
+
+pub use self::form_renderer::{ForeignKeyStorage, InsertableDatabaseEntry};
 pub use self::table_renderer::RenderableDatabaseEntry;
 
 pub trait Renderable: Sized {
