@@ -32,7 +32,7 @@ macro_rules! impl_select {
             const STATEMENT_SELECT: &'static str = const_format::concatcp!(<$name as crate::backend::database::Selectable>::STATEMENT_SELECT_ALL, " WHERE id = ?");
 
             /// Select an element and parse it.
-            fn select(database: &crate::backend::database::Database, index: PrimaryKey<Self>) -> Result<Self::Output, crate::backend::database::Error> {
+            fn select(database: &crate::backend::database::Database, index: crate::backend::database::PrimaryKey<Self>) -> Result<Self::Output, crate::backend::database::Error> {
                 Ok(database
                     .connection
                     .query_row(Self::STATEMENT_SELECT, (index.0,), |row| {
