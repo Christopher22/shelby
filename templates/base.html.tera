@@ -309,6 +309,31 @@
 
             <h6
               class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-body-secondary text-uppercase">
+              <span>Accounting</span>
+            </h6>
+            <ul class="nav flex-column">
+              <li class="nav-item">
+                <a class="nav-link d-flex align-items-center gap-2" href="/categories">
+                  <svg class="bi"><use xlink:href="#file-earmark"/></svg>
+                  Categories
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link d-flex align-items-center gap-2" href="/cost_centers">
+                  <svg class="bi"><use xlink:href="#file-earmark"/></svg>
+                  Cost centers
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link d-flex align-items-center gap-2" href="/accounts">
+                  <svg class="bi"><use xlink:href="#file-earmark"/></svg>
+                  Accounts
+                </a>
+              </li>
+            </ul>
+
+            <h6
+              class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-body-secondary text-uppercase">
               <span>Saved reports</span>
               <a class="link-secondary" href="#" aria-label="Add a new report">
                 <svg class="bi">

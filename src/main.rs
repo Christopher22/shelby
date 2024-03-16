@@ -320,7 +320,7 @@ macro_rules! create_routes {
 
                     let client = crate::tests::login(engine);
                     let creation_response = client.post(ACCESS_POINT).json(&example).dispatch();
-                    assert_eq!(creation_response.status(), Status::Created);
+                    assert_eq!(creation_response.status(), Status::Created, "post");
 
                     // Extract the primary key
                     let primary_key_path = creation_response
@@ -328,7 +328,7 @@ macro_rules! create_routes {
                         .get_one("Location")
                         .expect("valid string");
                     let response = client.get(primary_key_path).dispatch();
-                    assert_eq!(response.status(), Status::Ok);
+                    assert_eq!(response.status(), Status::Ok, "get");
 
                     // Parse the Json response
                     let response = response.into_string().expect("valid str");
@@ -462,6 +462,30 @@ create_routes!(crate::backend::user::User {
     get_multiple: "/users?<limit>&<offset>&<order>"
 });
 
+create_routes!(crate::backend::accounting::Account {
+    module: account,
+    add_json: "/accounts",
+    add_frontend: "/accounts/new",
+    get_single: "/accounts/<id>",
+    get_multiple: "/accounts?<limit>&<offset>&<order>"
+});
+
+create_routes!(crate::backend::accounting::Category {
+    module: category,
+    add_json: "/categories",
+    add_frontend: "/categories/new",
+    get_single: "/categories/<id>",
+    get_multiple: "/categories?<limit>&<offset>&<order>"
+});
+
+create_routes!(crate::backend::accounting::CostCenter {
+    module: cost_center,
+    add_json: "/cost_centers",
+    add_frontend: "/cost_centers/new",
+    get_single: "/cost_centers/<id>",
+    get_multiple: "/cost_centers?<limit>&<offset>&<order>"
+});
+
 #[launch]
 fn rocket() -> _ {
     let database = Database::in_memory().expect("valid database");
@@ -509,14 +533,18 @@ fn rocket() -> _ {
                 person,
                 group,
                 document,
-                user + (
-                    index_protected,
-                    index_public,
-                    serve_files,
-                    login,
-                    logout,
-                    download_document
-                )
+                user,
+                category,
+                cost_center,
+                account
+                    + (
+                        index_protected,
+                        index_public,
+                        serve_files,
+                        login,
+                        logout,
+                        download_document
+                    )
             ),
         )
 }

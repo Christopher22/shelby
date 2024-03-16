@@ -1,4 +1,5 @@
 use crate::backend::{
+    accounting::Category,
     database::{Database, Record, Selectable},
     document::Document,
     person::{Group, Person},
@@ -122,6 +123,40 @@ impl RenderableDatabaseEntry<3> for User {
             user.related_to
                 .map(|value| value.to_string())
                 .unwrap_or_default(),
+        ]
+    }
+}
+
+impl RenderableDatabaseEntry<1> for crate::backend::accounting::Category {
+    const TITLE: &'static str = "Categories";
+    const COLUMNS: [&'static str; 1] = ["Description"];
+    const URL_ADD: &'static str = "/categories/new";
+
+    fn generate_table_row(category: Record<Self>) -> [String; 1] {
+        [category.value.description]
+    }
+}
+
+impl RenderableDatabaseEntry<1> for crate::backend::accounting::CostCenter {
+    const TITLE: &'static str = "Cost centers";
+    const COLUMNS: [&'static str; 1] = ["Description"];
+    const URL_ADD: &'static str = "/cost_centers/new";
+
+    fn generate_table_row(cost_center: Record<Self>) -> [String; 1] {
+        [cost_center.value.description]
+    }
+}
+
+impl RenderableDatabaseEntry<3> for crate::backend::accounting::Account {
+    const TITLE: &'static str = "Accounts";
+    const COLUMNS: [&'static str; 3] = ["Code", "Category", "Description"];
+    const URL_ADD: &'static str = "/accounts/new";
+
+    fn generate_table_row(account: Record<Self>) -> [String; 3] {
+        [
+            account.value.code.to_string(),
+            account.value.category.to_string(),
+            account.value.description,
         ]
     }
 }

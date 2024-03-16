@@ -42,29 +42,48 @@ impl Database {
     }
 
     fn get_migrations() -> Migrations<'static> {
-        Migrations::new(vec![M::up(const_format::concatcp!(
-            crate::backend::person::Person::STATEMENT_CREATE_TABLE,
-            "; ",
-            crate::backend::person::Group::STATEMENT_CREATE_TABLE,
-            "; ",
-            crate::backend::person::Membership::STATEMENT_CREATE_TABLE,
-            "; ",
-            crate::backend::user::User::STATEMENT_CREATE_TABLE,
-            "; ",
-            crate::backend::document::Document::STATEMENT_CREATE_TABLE,
-            "; ",
-        ))
-        .down(const_format::concatcp!(
-            "DROP TABLE ",
-            crate::backend::person::Person::TABLE_NAME,
-            "; DROP TABLE ",
-            crate::backend::person::Group::TABLE_NAME,
-            "; DROP TABLE ",
-            crate::backend::person::Membership::TABLE_NAME,
-            "; DROP TABLE ",
-            crate::backend::user::User::TABLE_NAME,
-            "; ",
-        ))])
+        Migrations::new(vec![
+            M::up(const_format::concatcp!(
+                crate::backend::person::Person::STATEMENT_CREATE_TABLE,
+                "; ",
+                crate::backend::person::Group::STATEMENT_CREATE_TABLE,
+                "; ",
+                crate::backend::person::Membership::STATEMENT_CREATE_TABLE,
+                "; ",
+                crate::backend::user::User::STATEMENT_CREATE_TABLE,
+                "; ",
+                crate::backend::document::Document::STATEMENT_CREATE_TABLE,
+                "; ",
+            ))
+            .down(const_format::concatcp!(
+                "DROP TABLE ",
+                crate::backend::person::Person::TABLE_NAME,
+                "; DROP TABLE ",
+                crate::backend::person::Group::TABLE_NAME,
+                "; DROP TABLE ",
+                crate::backend::person::Membership::TABLE_NAME,
+                "; DROP TABLE ",
+                crate::backend::user::User::TABLE_NAME,
+                "; ",
+            )),
+            M::up(const_format::concatcp!(
+                crate::backend::accounting::Account::STATEMENT_CREATE_TABLE,
+                "; ",
+                crate::backend::accounting::Category::STATEMENT_CREATE_TABLE,
+                "; ",
+                crate::backend::accounting::CostCenter::STATEMENT_CREATE_TABLE,
+                "; ",
+            ))
+            .down(const_format::concatcp!(
+                "DROP TABLE ",
+                crate::backend::person::Person::STATEMENT_CREATE_TABLE,
+                "; DROP TABLE ",
+                crate::backend::person::Group::STATEMENT_CREATE_TABLE,
+                "; DROP TABLE ",
+                crate::backend::person::Group::STATEMENT_CREATE_TABLE,
+                ";"
+            )),
+        ])
     }
 }
 

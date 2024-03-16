@@ -182,3 +182,66 @@ impl InsertableDatabaseEntry for crate::backend::user::User {
     type PostMethod = rocket::serde::json::Json<Self>;
     type FieldsType = [Field; 5];
 }
+
+impl InsertableDatabaseEntry for crate::backend::accounting::Category {
+    const NAME: &'static str = "New category";
+    const FIELDS: [Field; 1] = [Field::new(
+        "description",
+        InputType::Text(Metadata {
+            label: "Description",
+            placeholder: Some("Description of the new category"),
+            required: true,
+        }),
+    )];
+
+    type PostMethod = rocket::serde::json::Json<Self>;
+    type FieldsType = [Field; 1];
+}
+
+impl InsertableDatabaseEntry for crate::backend::accounting::CostCenter {
+    const NAME: &'static str = "New cost center";
+    const FIELDS: [Field; 1] = [Field::new(
+        "description",
+        InputType::Text(Metadata {
+            label: "Description",
+            placeholder: Some("Description of the new cost center"),
+            required: true,
+        }),
+    )];
+
+    type PostMethod = rocket::serde::json::Json<Self>;
+    type FieldsType = [Field; 1];
+}
+
+impl InsertableDatabaseEntry for crate::backend::accounting::Account {
+    const NAME: &'static str = "New account";
+    const FIELDS: [Field; 3] = [
+        Field::new(
+            "code",
+            InputType::Number(Metadata {
+                label: "Code",
+                placeholder: Some("Code of the account"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "category",
+            InputType::new_foreign::<crate::backend::accounting::Category>(Metadata {
+                label: "Category",
+                placeholder: Some("Category the account belongs to"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "description",
+            InputType::Text(Metadata {
+                label: "Description",
+                placeholder: Some("Description of the new cost center"),
+                required: true,
+            }),
+        ),
+    ];
+
+    type PostMethod = rocket::serde::json::Json<Self>;
+    type FieldsType = [Field; 3];
+}
