@@ -77,7 +77,14 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         var formData = new FormData(this);
-        var dataToSend = new FormData();
+        var is_json_post = "{{method}}" === "application&#x2F;json";
+
+        if(is_json_post) {
+          var dataToSend = {}
+        } else {
+          // Unfortunately, this does not preserve the JavaScript but casts everything to strings.
+          var dataToSend = new FormData();
+        }
 
         // Serialize form data
         for (var pair of formData) {
@@ -101,7 +108,11 @@ document.addEventListener("DOMContentLoaded", function() {
               }
             }
 
-            dataToSend.append(pair[0], value);
+            if(is_json_post) {
+              dataToSend[pair[0]] = value;
+            } else {
+              dataToSend.append(pair[0], value);
+            }
         }
 
         // Deactivate form inputs
@@ -130,11 +141,9 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         };
 
-        if("{{method}}" === "application&#x2F;json") {
+        if(is_json_post) {
           xhr.setRequestHeader('Content-Type', 'application/json');
-          // Supported in Supported in Chrome 73+, Firefox 63+, Safari 12.1
-          // TODO: Check why boolean values are serialized as text
-          dataToSend = JSON.stringify(Object.fromEntries(dataToSend));
+          dataToSend = JSON.stringify(dataToSend);
         } 
         xhr.send(dataToSend);
     });
