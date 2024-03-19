@@ -23,6 +23,15 @@ impl Database {
         })?)
     }
 
+    /// Open a file or create a new file.
+    pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
+        Ok(Connection::open(path).and_then(|connection| {
+            let mut database = Database { connection };
+            database.prepare_connection()?;
+            Ok(database)
+        })?)
+    }
+
     /// Get a raw SQLite database. This should only be relevant for unit testing purposes.
     #[cfg(test)]
     pub fn plain() -> Result<Self, Error> {

@@ -12,6 +12,7 @@ mod error;
 mod frontend;
 mod util;
 
+use backend::database::Selectable;
 use rocket::{
     data::{Limits, ToByteUnit},
     form::Strict,
@@ -486,18 +487,75 @@ create_routes!(crate::backend::accounting::CostCenter {
     get_multiple: "/cost_centers?<limit>&<offset>&<order>"
 });
 
-#[launch]
-fn rocket() -> _ {
-    let database = Database::in_memory().expect("valid database");
+/// Read a value from STDIN and return it without whitespace.
+fn read_value(message: &'static str) -> String {
+    let mut input = String::new();
+    loop {
+        println!("{}", message);
+        match std::io::stdin().read_line(&mut input) {
+            Ok(_) if input.trim().len() > 1 => {
+                // Remove any whitespace in the begin
+                input.truncate(input.trim_end().len());
+                break input;
+            }
+            _ => {
+                input.clear();
+            }
+        }
+    }
+}
 
-    // Add a first default user
-    {
+/// Load the database, insert a default user if not specified, or kill the application on failure.
+fn load_database() -> Database {
+    let command_line_args: Vec<String> = std::env::args().collect();
+    let (new_user, database) = match &command_line_args.as_slice() {
+        &[_, path] => {
+            let path = std::path::Path::new(&path);
+            let database = match Database::open(path) {
+                Ok(database) => database,
+                Err(db_error) => {
+                    eprintln!("Creating the database failed: {}", db_error);
+                    std::process::exit(-1)
+                }
+            };
+
+            // Prepare the first user, if not specified
+            match backend::user::User::select_all(&database) {
+                Ok(users) if users.len() == 0 => {
+                    let user_name = read_value("Please enter the first user name: ");
+                    let password = read_value("Please enter the password: ");
+                    (Some((user_name, password)), database)
+                }
+                Err(error) => {
+                    eprintln!("Creating the database failed: {}", error);
+                    std::process::exit(-1)
+                }
+                _ => (None, database),
+            }
+        }
+        _ => {
+            // Create the database in memory and prepare the default user
+            let database = Database::in_memory().expect("valid database");
+            (
+                Some((String::from("admin"), String::from("test1234"))),
+                database,
+            )
+        }
+    };
+
+    if let Some((username, password)) = new_user {
         let mut admin = crate::backend::user::User::create_default(&database);
-        admin.username = String::from("admin");
-        admin.password_hash = crate::backend::user::PasswordHash::new("admin", "test1234");
+        admin.password_hash = crate::backend::user::PasswordHash::new(&username, &password);
+        admin.username = username;
         admin.insert(&database).expect("unable to add Admin user");
     }
 
+    database
+}
+
+#[launch]
+fn rocket() -> _ {
+    let database = load_database();
     let config = match Config::from_env(database) {
         Some(value) => value,
         None => {
