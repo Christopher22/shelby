@@ -87,6 +87,25 @@ impl crate::backend::database::SelectableByPrimaryKey for Document {
     );
 }
 
+impl crate::backend::database::Referenceable for Document {
+    const STATEMENT_SELECT_NAME: &'static str = "";
+
+    fn generate_descriptions(
+        database: &Database,
+    ) -> Result<Vec<(PrimaryKey<Self>, String)>, super::database::Error> {
+        const QUERY: &'static str = "SELECT id, processed, description FROM documents";
+        let mut stmt = database.connection.prepare(Self::STATEMENT_SELECT_NAME)?;
+        let iterator = stmt.query_map((), |row| {
+            <(PrimaryKey<Self>, Date, String)>::try_from(row).map(
+                |(primary_key, date, description)| {
+                    (primary_key, format!("{} {}", date, description))
+                },
+            )
+        })?;
+        Ok(iterator.filter_map(|value| value.ok()).collect())
+    }
+}
+
 impl DefaultGenerator for Document {
     fn create_default(database: &crate::backend::database::Database) -> Self {
         let person = Person::default().insert(&database).expect("valid person");
