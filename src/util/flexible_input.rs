@@ -97,7 +97,7 @@ pub struct DocumentForm<'r> {
     to_person: String,
     recieved: String,
     processed: String,
-    description: Option<String>,
+    description: String,
 }
 
 impl MappableForm for crate::backend::document::Document {

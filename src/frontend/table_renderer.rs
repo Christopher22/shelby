@@ -134,7 +134,7 @@ impl RenderableDatabaseEntry<6> for Document {
                 .get(document.to_person)
                 .map(String::from)
                 .unwrap_or_else(|| document.from_person.to_string()),
-            document.description.unwrap_or_default(),
+            document.description.clone(),
         ]
     }
 }

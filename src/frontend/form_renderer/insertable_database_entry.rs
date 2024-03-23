@@ -112,7 +112,7 @@ impl InsertableDatabaseEntry for crate::backend::document::Document {
             InputType::Text(Metadata {
                 label: "Description",
                 placeholder: Some("The description of the document"),
-                required: false,
+                required: true,
             }),
         ),
         // Private field from here

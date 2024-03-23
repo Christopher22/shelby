@@ -19,7 +19,7 @@ crate::backend::database::make_struct!(
         to_person: PrimaryKey<Person>,
         recieved: Date,
         processed: Date,
-        description: Option<String>
+        description: String
     } ("FOREIGN KEY(processed_by) REFERENCES users(id), FOREIGN KEY(from_person) REFERENCES persons(id), FOREIGN KEY(to_person) REFERENCES persons(id)")
 );
 
@@ -58,7 +58,7 @@ impl crate::backend::database::Selectable for Document {
         PrimaryKey<Person>,
         Date,
         Date,
-        Option<String>,
+        String,
     );
 
     const SORTABLE_COLUMNS: &'static [&'static str] = &["id", "recieved", "processed"];
@@ -123,7 +123,7 @@ impl DefaultGenerator for Document {
             to_person: person,
             recieved: Date::today(),
             processed: Date::today(),
-            description: None,
+            description: String::new(),
         }
     }
 }
@@ -137,7 +137,7 @@ pub struct Metadata {
     pub to_person: PrimaryKey<Person>,
     pub recieved: Date,
     pub processed: Date,
-    pub description: Option<String>,
+    pub description: String,
 }
 
 impl From<Record<Document>> for Metadata {
