@@ -94,11 +94,14 @@ impl crate::backend::database::Referenceable for Document {
         database: &Database,
     ) -> Result<Vec<(PrimaryKey<Self>, String)>, super::database::Error> {
         const QUERY: &'static str = "SELECT id, processed, description FROM documents";
-        let mut stmt = database.connection.prepare(Self::STATEMENT_SELECT_NAME)?;
+        let mut stmt = database.connection.prepare(QUERY)?;
         let iterator = stmt.query_map((), |row| {
-            <(PrimaryKey<Self>, Date, String)>::try_from(row).map(
+            <(PrimaryKey<Self>, Date, Option<String>)>::try_from(row).map(
                 |(primary_key, date, description)| {
-                    (primary_key, format!("{} {}", date, description))
+                    (
+                        primary_key,
+                        format!("{} {}", date, description.unwrap_or_default()),
+                    )
                 },
             )
         })?;

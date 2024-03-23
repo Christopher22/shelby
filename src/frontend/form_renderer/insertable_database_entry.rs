@@ -245,3 +245,52 @@ impl InsertableDatabaseEntry for crate::backend::accounting::Account {
     type PostMethod = rocket::serde::json::Json<Self>;
     type FieldsType = [Field; 3];
 }
+
+impl InsertableDatabaseEntry for crate::backend::accounting::Entry {
+    const NAME: &'static str = "New entry";
+    const FIELDS: [Field; 5] = [
+        Field::new(
+            "evidence",
+            InputType::new_foreign::<crate::backend::document::Document>(Metadata {
+                label: "Evidence",
+                placeholder: Some("The evidence associated with the document"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "account",
+            InputType::new_foreign::<crate::backend::accounting::Account>(Metadata {
+                label: "Account",
+                placeholder: Some("The account a booking is connected to"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "cost_center",
+            InputType::new_foreign::<crate::backend::accounting::CostCenter>(Metadata {
+                label: "Cost center",
+                placeholder: Some("The cost center this entry refers to"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "amount",
+            InputType::Number(Metadata {
+                label: "Amount",
+                placeholder: Some("Amount"),
+                required: true,
+            }),
+        ),
+        Field::new(
+            "description",
+            InputType::Text(Metadata {
+                label: "Description",
+                placeholder: Some("Description of the new cost center"),
+                required: true,
+            }),
+        ),
+    ];
+
+    type PostMethod = rocket::serde::json::Json<Self>;
+    type FieldsType = [Field; 5];
+}

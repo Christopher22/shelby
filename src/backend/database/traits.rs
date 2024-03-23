@@ -37,6 +37,19 @@ where
     }
 }
 
+impl<T1, T2, T3> Dependency for (T1, T2, T3)
+where
+    T1: Dependency,
+    T2: Dependency,
+    T3: Dependency,
+{
+    fn create_dependencies(database: &Database) -> Result<(), Error> {
+        T1::create_dependencies(database)?;
+        T2::create_dependencies(database)?;
+        Ok(T3::create_dependencies(database)?)
+    }
+}
+
 /// An element serialialized in the Database.
 pub trait DatabaseEntry: Sized {
     type DependsOn: Dependency;

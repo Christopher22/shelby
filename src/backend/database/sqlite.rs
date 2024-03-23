@@ -82,14 +82,18 @@ impl Database {
                 "; ",
                 crate::backend::accounting::CostCenter::STATEMENT_CREATE_TABLE,
                 "; ",
+                crate::backend::accounting::Entry::STATEMENT_CREATE_TABLE,
+                "; ",
             ))
             .down(const_format::concatcp!(
                 "DROP TABLE ",
-                crate::backend::person::Person::STATEMENT_CREATE_TABLE,
+                crate::backend::accounting::Account::TABLE_NAME,
                 "; DROP TABLE ",
-                crate::backend::person::Group::STATEMENT_CREATE_TABLE,
+                crate::backend::accounting::Category::TABLE_NAME,
                 "; DROP TABLE ",
-                crate::backend::person::Group::STATEMENT_CREATE_TABLE,
+                crate::backend::accounting::CostCenter::TABLE_NAME,
+                "; DROP TABLE ",
+                crate::backend::accounting::Entry::TABLE_NAME,
                 ";"
             )),
         ])

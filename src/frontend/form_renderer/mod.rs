@@ -46,9 +46,11 @@ where
         for field in fields.iter_mut() {
             match &mut field.input_type {
                 InputType::Hidden(hidden) => hidden.set_value(&self.user),
-                InputType::ForeignKey(foreign_key) => foreign_key
-                    .load(&mut foreign_key_storage)
-                    .unwrap_or_default(),
+                InputType::ForeignKey(foreign_key) => {
+                    if let Err(error) = foreign_key.load(&mut foreign_key_storage) {
+                        println!("Loading representations failed: {}", error);
+                    }
+                }
                 _ => {}
             };
         }

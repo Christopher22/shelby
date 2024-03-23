@@ -23,7 +23,7 @@ impl DefaultGenerator for Account {
         Account {
             code: 1800,
             category,
-            description: String::from("Exampke account"),
+            description: String::from("Example account"),
         }
     }
 }

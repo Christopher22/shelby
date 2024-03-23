@@ -487,6 +487,14 @@ create_routes!(crate::backend::accounting::CostCenter {
     get_multiple: "/cost_centers?<limit>&<offset>&<order>"
 });
 
+create_routes!(crate::backend::accounting::Entry {
+    module: entry,
+    add_json: "/entries",
+    add_frontend: "/entries/new",
+    get_single: "/entries/<id>",
+    get_multiple: "/entries?<limit>&<offset>&<order>"
+});
+
 /// Read a value from STDIN and return it without whitespace.
 fn read_value(message: &'static str) -> String {
     let mut input = String::new();
@@ -594,6 +602,7 @@ fn rocket() -> _ {
                 user,
                 category,
                 cost_center,
+                entry,
                 account
                     + (
                         index_protected,

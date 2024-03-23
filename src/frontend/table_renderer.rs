@@ -1,5 +1,5 @@
 use crate::backend::{
-    accounting::Category,
+    accounting::{Account, Category, CostCenter},
     database::{Database, Record, Selectable},
     document::Document,
     person::{Group, Person},
@@ -206,6 +206,48 @@ impl RenderableDatabaseEntry<3> for crate::backend::accounting::Account {
                 .map(String::from)
                 .unwrap_or_else(|| account.category.to_string()),
             account.value.description,
+        ]
+    }
+}
+
+impl RenderableDatabaseEntry<5> for crate::backend::accounting::Entry {
+    const TITLE: &'static str = "Entries";
+    const COLUMNS: [&'static str; 5] = [
+        "Evidence",
+        "Account",
+        "Cost center",
+        "Amount",
+        "Description",
+    ];
+    const URL_ADD: &'static str = "/entries/new";
+
+    fn load_required_foreign_keys(
+        foreign_key_storage: &mut ForeignKeyStorage<'_>,
+    ) -> Result<(), crate::backend::database::Error> {
+        foreign_key_storage.add::<Document>()?;
+        foreign_key_storage.add::<Account>()?;
+        foreign_key_storage.add::<CostCenter>()
+    }
+
+    fn generate_table_row(
+        entry: Record<Self>,
+        foreign_keys: &ForeignKeyStorage<'_>,
+    ) -> [String; 5] {
+        [
+            foreign_keys
+                .get(entry.evidence)
+                .map(String::from)
+                .unwrap_or_else(|| entry.evidence.to_string()),
+            foreign_keys
+                .get(entry.account)
+                .map(String::from)
+                .unwrap_or_else(|| entry.account.to_string()),
+            foreign_keys
+                .get(entry.cost_center)
+                .map(String::from)
+                .unwrap_or_else(|| entry.cost_center.to_string()),
+            entry.amount.to_string(),
+            entry.description.clone(),
         ]
     }
 }
