@@ -1,0 +1,10 @@
+[default]
+address = "127.0.0.1"
+port = 8000
+secret_key = "hPrYyЭRiMyµ5sBB1π+CMæ1køFsåqKvBiQJxBVHQk="
+
+[default.limits]
+form = "10 MiB"
+file = "10 MiB"
+data-form = "10 MiB"
+bytes = "10 MiB"

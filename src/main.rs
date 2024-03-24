@@ -565,31 +565,14 @@ fn load_database() -> Database {
 fn rocket() -> _ {
     let database = load_database();
     let config = match Config::from_env(database) {
-        Some(value) => value,
-        None => {
-            eprintln!(
-                "Env variable {} does not point to valid asset directory",
-                Config::ENV_VARIBLE_PATH
-            );
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("{}", error);
             std::process::exit(1)
         }
     };
 
-    let limits = Limits::default()
-        .limit("form", 5.mebibytes())
-        .limit("file", 5.mebibytes())
-        .limit("data-form", 5.mebibytes())
-        .limit("bytes", 5.mebibytes());
-
-    let figment = rocket::Config::figment().merge(
-        rocket::figment::providers::Serialized::defaults(rocket::Config {
-            secret_key: rocket::config::SecretKey::generate().expect("safe RNG available"),
-            limits,
-            ..Default::default()
-        }),
-    );
-
-    rocket::custom(figment)
+    rocket::build()
         .manage(config)
         .attach(Template::fairing())
         .register("/", catchers![error_handler])
