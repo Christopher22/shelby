@@ -236,7 +236,7 @@ impl InsertableDatabaseEntry for crate::backend::accounting::Account {
             "description",
             InputType::Text(Metadata {
                 label: "Description",
-                placeholder: Some("Description of the new cost center"),
+                placeholder: Some("Description of the new account"),
                 required: true,
             }),
         ),
@@ -285,7 +285,7 @@ impl InsertableDatabaseEntry for crate::backend::accounting::Entry {
             "description",
             InputType::Text(Metadata {
                 label: "Description",
-                placeholder: Some("Description of the new cost center"),
+                placeholder: Some("Description of the new entry"),
                 required: true,
             }),
         ),
