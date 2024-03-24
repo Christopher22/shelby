@@ -24,7 +24,7 @@ use rocket_dyn_templates::{context, Template};
 use std::ops::Deref;
 use std::path::PathBuf;
 
-use self::auth::{login, logout, AuthenticatedUser};
+use self::auth::{login, login_html, logout, AuthenticatedUser};
 use self::backend::{
     database::{Database, DefaultGenerator, Insertable, PrimaryKey, SelectableByPrimaryKey},
     Pagination,
@@ -592,6 +592,7 @@ fn rocket() -> _ {
                         index_public,
                         serve_files,
                         login,
+                        login_html,
                         logout,
                         download_document
                     )

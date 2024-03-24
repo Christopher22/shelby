@@ -1,37 +1,40 @@
 {% extends "base" %}
+{% block title %}
+Shelby: {{ name }}
+{% endblock title %}
+
 {% block main %}
-<h4 class="mb-3">{{ name }}</h4>
-<form id="shelby_form" class="needs-validation" novalidate="">
-    {% for field in fields %}
-    {% if field.input_type == "hidden" %}
-    <input type="hidden" id="{{field.name}}" name="{{field.name}}" value="{{field.value}}" />
-    {% else %}
-    <div class="col-12">
-        <label for="{{field.name}}" class="form-label">{{field.label}}</label>
-        <div class="input-group has-validation">
-        {% if field.input_type == "file" %}
-        <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" accept="{{field.accept}}" multiple="{{field.multiple}}" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} />
-        {% elif field.input_type == "select" %}
-        <select id="{{field.name}}" name="{{field.name}}" class="form-control" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
-        {% for value in foreign_keys[field.foreign_keys] %}
-            <option value="{{value.0 | safe}}">{{value.1}}</option>
-        {% endfor %}
-        </select>
+<div class="container mt-5">
+    <form id="shelby_form" class="needs-validation" novalidate="">
+        {% for field in fields %}
+        {% if field.input_type == "hidden" %}
+        <input type="hidden" id="{{field.name}}" name="{{field.name}}" value="{{field.value}}" />
         {% else %}
-        <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" placeholder="{{field.placeholder}}" {% if field.required == true %} required {% endif %} {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} />
+        <div class="mb-3">
+            <label for="{{field.name}}" class="form-label">{{field.label}}</label>
+            <div class="input-group has-validation">
+            {% if field.input_type == "file" %}
+            <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" accept="{{field.accept}}" multiple="{{field.multiple}}" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} />
+            {% elif field.input_type == "select" %}
+            <select id="{{field.name}}" name="{{field.name}}" class="form-control" {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} >
+            {% for value in foreign_keys[field.foreign_keys] %}
+                <option value="{{value.0 | safe}}">{{value.1}}</option>
+            {% endfor %}
+            </select>
+            {% else %}
+            <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" placeholder="{{field.placeholder}}" {% if field.required == true %} required {% endif %} {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} />
+            {% endif %}
+            <div class="invalid-feedback">
+                Valus is required.
+            </div>
+            </div>
+        </div>
         {% endif %}
-        <div class="invalid-feedback">
-            Valus is required.
-        </div>
-        </div>
-    </div>
-    {% endif %}
-    {% endfor %}
+        {% endfor %}
 
-    <hr class="my-4">
-
-    <button class="w-100 btn btn-primary btn-lg" type="submit">Create</button>
-</form>
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+</div>
 {% endblock main %}
 
 {% block body_end %}

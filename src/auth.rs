@@ -10,6 +10,7 @@ use rocket::{
     serde::json,
     State,
 };
+use rocket_dyn_templates::{context, Template};
 
 use super::{Config, Error};
 
@@ -124,6 +125,11 @@ pub fn login(
         Ok(None) => Err(Error::NotFound),
         Err(err) => Err(err.into()),
     }
+}
+
+#[get("/users/login")]
+pub async fn login_html() -> Template {
+    Template::render("login", context! {})
 }
 
 #[get("/users/logout")]

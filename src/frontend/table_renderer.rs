@@ -86,7 +86,7 @@ pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
 }
 
 impl RenderableDatabaseEntry<3> for Person {
-    const TITLE: &'static str = "Contacts";
+    const TITLE: &'static str = "Persons";
     const COLUMNS: [&'static str; 3] = ["Name", "Address", "E-Mail"];
     const URL_ADD: &'static str = "/persons/new";
 
