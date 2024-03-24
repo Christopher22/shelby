@@ -408,8 +408,11 @@ macro_rules! write_routes {
 // ------------------- Routes -------------------
 
 #[get("/", rank = 1)]
-async fn index_protected(_user: AuthenticatedUser<auth::Forward>) -> Template {
-    Template::render("dashboard", context! {})
+async fn index_protected(
+    _user: AuthenticatedUser<auth::Forward>,
+    config: &State<Config>,
+) -> Result<Template, Error> {
+    self::frontend::render_dashboard(&config.database())
 }
 
 #[get("/", rank = 2)]
