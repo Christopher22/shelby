@@ -166,9 +166,9 @@ impl InsertableDatabaseEntry for crate::backend::user::User {
         ),
         Field::new(
             "related_to",
-            InputType::Text(Metadata {
-                label: "Primary user",
-                placeholder: Some("ID of the primary user"),
+            InputType::new_foreign::<crate::backend::person::Person>(Metadata {
+                label: "Associated person",
+                placeholder: Some("ID of the associated person"),
                 required: false,
             }),
         ),
