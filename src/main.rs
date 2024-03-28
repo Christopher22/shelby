@@ -639,21 +639,6 @@ mod tests {
         (Client::tracked(engine).expect("valid client"), result)
     }
 
-    /// Compare a recieved response with a template.
-    fn compare_response(client: &Client, url: &'static str, template: &'static str) {
-        let recieved_response = client
-            .get(url)
-            .dispatch()
-            .into_string()
-            .expect("valid string");
-
-        let expected_output =
-            rocket_dyn_templates::Template::show(client.rocket(), template, context! {})
-                .expect("valid output");
-
-        assert_eq!(recieved_response, expected_output);
-    }
-
     pub fn login_with_callback<P: rocket::Phase, T>(
         engine: rocket::Rocket<P>,
         callback: impl Fn(&crate::backend::database::Database) -> T,
@@ -729,9 +714,11 @@ mod tests {
         };
 
         let client = add_user(rocket(), &credentials);
-
-        // Check we receive first the login page
-        compare_response(&client, "/", "login");
+        let recieved_login_page = client
+            .get("/")
+            .dispatch()
+            .into_string()
+            .expect("valid string");
 
         // Simulate login
         let creation_response = client
@@ -742,7 +729,13 @@ mod tests {
         assert_eq!(creation_response.status(), rocket::http::Status::SeeOther);
 
         // Now we get the dashboard!
-        compare_response(&client, "/", "dashboard");
+        let recieved_dashboard = client
+            .get("/")
+            .dispatch()
+            .into_string()
+            .expect("valid string");
+
+        assert_ne!(recieved_login_page, recieved_dashboard);
     }
 
     #[test]

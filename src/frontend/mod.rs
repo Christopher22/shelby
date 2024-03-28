@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use rocket::serde::Serialize;
 use rocket_dyn_templates::Template;
 
-mod form_renderer;
-mod table_renderer;
+mod forms;
+mod tables;
 mod util;
 
 #[cfg(test)]
@@ -12,8 +12,8 @@ mod tests;
 
 use crate::backend::accounting::Amount;
 
-pub use self::form_renderer::{ForeignKeyStorage, InsertableDatabaseEntry};
-pub use self::table_renderer::RenderableDatabaseEntry;
+pub use self::forms::{ForeignKeyStorage, InsertableDatabaseEntry};
+pub use self::tables::RenderableDatabaseEntry;
 
 pub trait Renderable: Sized {
     const TEMPLATE: &'static str;
