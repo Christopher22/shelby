@@ -25,13 +25,14 @@ where
 {
     const TEMPLATE: &'static str = "table";
 
-    fn generate_context(&self) -> impl Serialize {
+    fn generate_context(self) -> impl Serialize {
+        let next_len = self.0.len();
         context! {
             title: &T::TITLE,
             headers: &T::COLUMNS,
             url_add: &T::URL_ADD,
-            rows: &self.0,
-            next_url: self.1.next(self.0.len()).map(|value| format!("{}{}", T::url(), value.display_url())),
+            rows: self.0,
+            next_url: self.1.next(next_len).map(|value| format!("{}{}", T::url(), value.display_url())),
             previous_url: self.1.previous().map(|value| format!("{}{}", T::url(), value.display_url())),
         }
     }

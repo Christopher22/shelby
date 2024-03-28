@@ -18,7 +18,7 @@ pub use self::tables::RenderableDatabaseEntry;
 pub trait Renderable: Sized {
     const TEMPLATE: &'static str;
 
-    fn generate_context(&self) -> impl Serialize;
+    fn generate_context(self) -> impl Serialize;
 
     fn render(self) -> Template {
         Template::render(Self::TEMPLATE, self.generate_context())

@@ -40,7 +40,7 @@ where
 {
     const TEMPLATE: &'static str = "form";
 
-    fn generate_context(&self) -> impl rocket::serde::Serialize {
+    fn generate_context(self) -> impl rocket::serde::Serialize {
         let mut foreign_key_storage = ForeignKeyStorage::from(self.database);
         let mut fields = T::FIELDS.clone();
         for field in fields.iter_mut() {
