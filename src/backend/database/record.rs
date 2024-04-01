@@ -13,6 +13,13 @@ where
     pub value: T,
 }
 
+impl<T: Indexable> Record<T> {
+    /// Take ownership over the inner value.
+    pub fn into_inner(self) -> T {
+        self.value
+    }
+}
+
 impl<T> std::ops::Deref for Record<T>
 where
     T: Indexable,
