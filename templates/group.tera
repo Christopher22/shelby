@@ -1,0 +1,82 @@
+{% extends "base" %}
+
+{% block title %}
+Group: {{ description }}
+{% endblock title %}
+
+{% block main %}
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Comment</th>
+            <th scope="col"></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>row.person</td>
+            <td>row.comment</td>
+            <td><button data="{{row.membership_path}}">Delete</button></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <select id="new_persons" name="new_persons" class="form-control" >
+            {% for person in persons["persons"] %}
+                <option value="{{person.0 | safe}}">{{person.1}}</option>
+            {% endfor %}
+            </select>
+        </div>
+        <div class="col">
+            <button id="add_new_persons" class="btn btn-primary">Add person to group</button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Get the button element
+    var addButton = document.getElementById("add_new_persons");
+
+    // Add click event listener to the button
+    addButton.addEventListener("click", function() {
+        // Get the selected value from the dropdown
+        var selectedPerson = document.getElementById("new_persons").value;
+
+        // Create a new XMLHttpRequest object
+        var xhr = new XMLHttpRequest();
+
+        // Configure the request
+        xhr.open("POST", "/memberships");
+        xhr.setRequestHeader("Content-Type", "application/json");
+
+        // Define the data to be sent
+        var data = JSON.stringify({ person: selectedPerson });
+
+        // Set up the onload function to handle the response
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                console.log("Person added to group successfully!");
+            } else {
+                console.error("Error:", xhr.statusText);
+            }
+        };
+
+        // Set up the onerror function to handle any errors
+        xhr.onerror = function() {
+            console.error("Error:", xhr.statusText);
+        };
+
+        // Send the request
+        xhr.send(data);
+    });
+});
+</script>
+
+{% endblock main %}

@@ -110,7 +110,7 @@ macro_rules! create_routes {
                 })
             }
 
-            #[get($path_id, rank = 3)]
+            #[get($path_id, rank = 9)]
             pub fn get_by_id(
                 _user: AuthenticatedUser,
                 id: i64,
@@ -328,7 +328,12 @@ macro_rules! create_routes {
                         .headers()
                         .get_one("Location")
                         .expect("valid string");
-                    let response = client.get(primary_key_path).dispatch();
+
+                    // Create the response
+                    let mut response = client.get(primary_key_path);
+                    response.add_header(rocket::http::ContentType::JSON);
+                    let response = response.dispatch();
+
                     assert_eq!(response.status(), Status::Ok, "get");
 
                     // Parse the Json response
@@ -406,14 +411,6 @@ macro_rules! write_routes {
 }
 
 // ------------------- Routes -------------------
-
-#[get("/", rank = 1)]
-async fn index_protected(
-    _user: AuthenticatedUser<auth::Forward>,
-    config: &State<Config>,
-) -> Result<Template, Error> {
-    self::frontend::render_dashboard(&config.database())
-}
 
 #[get("/", rank = 2)]
 async fn index_public() -> Template {
@@ -566,6 +563,8 @@ fn load_database() -> Database {
 
 #[launch]
 fn rocket() -> _ {
+    use self::frontend::{group_overview, index_protected};
+
     let database = load_database();
     let config = match Config::from_env(database) {
         Ok(value) => value,
@@ -597,7 +596,8 @@ fn rocket() -> _ {
                         login,
                         login_html,
                         logout,
-                        download_document
+                        download_document,
+                        group_overview
                     )
             ),
         )
