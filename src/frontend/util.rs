@@ -105,3 +105,30 @@ impl<'a, C: Container> Serialize for ForeignKeyStorage<'a, C> {
         self.cache.serialize(serializer)
     }
 }
+
+impl<'a> From<ForeignKeyStorage<'a, Map>> for ForeignKeyStorage<'a, List> {
+    fn from(value: ForeignKeyStorage<'a, Map>) -> Self {
+        Self {
+            database: value.database,
+            cache: value
+                .cache
+                .into_iter()
+                .map(|table| {
+                    (
+                        table.0,
+                        List(
+                            table
+                                .1
+                                 .0
+                                .into_iter()
+                                .map(|foreign_key| {
+                                    (format!("/{}/{}", table.0, foreign_key.0), foreign_key.1)
+                                })
+                                .collect(),
+                        ),
+                    )
+                })
+                .collect(),
+        }
+    }
+}
