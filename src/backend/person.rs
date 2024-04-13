@@ -50,6 +50,7 @@ impl DatabaseEntry for Membership {
 }
 
 impl Membership {
+    /// Find all meberships of a single person.
     pub fn find_all_memberships(
         database: &Database,
         person: PrimaryKey<Person>,
@@ -70,6 +71,7 @@ impl Membership {
         Ok(iterator.filter_map(|value| value.ok()).collect())
     }
 
+    /// Find all members of a group.
     pub fn find_all_members(
         database: &Database,
         group: PrimaryKey<Group>,
@@ -90,10 +92,23 @@ impl Membership {
         Ok(iterator.filter_map(|value| value.ok()).collect())
     }
 
+    /// Insert a membership into the database.
     pub fn insert(&self, database: &Database) -> Result<usize, Error> {
         Ok(database.connection.execute(
             "INSERT INTO memberships (person_id, group_id, updated, comment) VALUES (?, ?, ?, ?)",
             (self.person.0, self.group.0, &self.updated, &self.comment),
+        )?)
+    }
+
+    /// Remove a membership from the database.
+    pub fn remove(
+        person: PrimaryKey<Person>,
+        group: PrimaryKey<Group>,
+        database: &Database,
+    ) -> Result<usize, Error> {
+        Ok(database.connection.execute(
+            "DELETE FROM memberships WHERE person_id = ? AND group_id = ?",
+            (person.0, group.0),
         )?)
     }
 }
@@ -149,37 +164,58 @@ mod membership_tests {
     }
 
     #[test]
-    fn test_no_members() {
-        let (database, _, group) = setup_database();
-        assert_eq!(Membership::find_all_members(&database, group), Ok(vec![]));
-    }
-
-    #[test]
-    fn test_no_group() {
-        let (database, (p1, _, _), _) = setup_database();
-        assert_eq!(Membership::find_all_memberships(&database, p1), Ok(vec![]));
-    }
-
-    #[test]
-    fn test_membership() {
+    fn test_insert_and_find() {
         let (database, (p1, _, _), g1) = setup_database();
 
         let membership = Membership {
-            person: p1.clone(),
-            group: g1.clone(),
-            updated: Some(crate::backend::Date::today()),
+            person: p1,
+            group: g1,
+            updated: None,
             comment: Some(String::from("Example")),
         };
 
         membership.insert(&database).expect("Valid insert");
 
+        let memberships_of_group = Membership::find_all_members(&database, g1.clone()).unwrap();
+        assert_eq!(memberships_of_group.len(), 1);
+        assert_eq!(memberships_of_group[0], membership);
+
+        let memberships_of_person = Membership::find_all_memberships(&database, p1).unwrap();
+        assert_eq!(memberships_of_person.len(), 1);
+        assert_eq!(memberships_of_person[0], membership);
+    }
+
+    #[test]
+    fn test_remove() {
+        let (database, (p1, _, _), g1) = setup_database();
+
+        let membership = Membership {
+            person: p1,
+            group: g1,
+            updated: None,
+            comment: Some(String::from("Example")),
+        };
+
+        membership.insert(&database).expect("Valid insert");
+
+        assert_eq!(Membership::remove(p1, g1, &database), Ok(1));
+
         assert_eq!(
             Membership::find_all_members(&database, g1.clone()),
-            Ok(vec![membership.clone()])
+            Ok(vec![])
         );
-        assert_eq!(
-            Membership::find_all_memberships(&database, p1),
-            Ok(vec![membership])
-        );
+        assert_eq!(Membership::find_all_memberships(&database, p1), Ok(vec![]));
+    }
+
+    #[test]
+    fn test_find_all_members_with_no_members() {
+        let (database, _, group) = setup_database();
+        assert_eq!(Membership::find_all_members(&database, group), Ok(vec![]));
+    }
+
+    #[test]
+    fn test_find_all_memberships_with_no_group() {
+        let (database, (p1, _, _), _) = setup_database();
+        assert_eq!(Membership::find_all_memberships(&database, p1), Ok(vec![]));
     }
 }

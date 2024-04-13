@@ -12,11 +12,12 @@ mod error;
 mod frontend;
 mod util;
 
-use backend::database::Selectable;
+use backend::{database::Selectable, person::Membership};
 use rocket::{
     data::{Limits, ToByteUnit},
     form::Strict,
     fs::NamedFile,
+    response::status::{Created, NoContent},
     serde::json::Json,
     State,
 };
@@ -438,6 +439,46 @@ create_routes!(crate::backend::person::Group {
     get_multiple: "/groups?<limit>&<offset>&<order>"
 });
 
+#[post("/groups/<group_id>/<person_id>")]
+async fn add_member_to_group(
+    group_id: i64,
+    person_id: i64,
+    state: &State<Config>,
+    _user: AuthenticatedUser,
+) -> Result<Created<String>, Error> {
+    Membership {
+        person: PrimaryKey::from(person_id),
+        group: PrimaryKey::from(group_id),
+        updated: None,
+        comment: None,
+    }
+    .insert(&state.database())
+    .map_err(Error::from)
+    .and_then(|value| match value {
+        1 => Ok(Created::new(format!("/groups/{}/{}", group_id, person_id))),
+        _ => Err(Error::ConstraintViolation),
+    })
+}
+
+#[delete("/groups/<group_id>/<person_id>")]
+async fn remove_member_from_group(
+    group_id: i64,
+    person_id: i64,
+    state: &State<Config>,
+    _user: AuthenticatedUser,
+) -> Result<NoContent, Error> {
+    Membership::remove(
+        PrimaryKey::from(person_id),
+        PrimaryKey::from(group_id),
+        &state.database(),
+    )
+    .map_err(Error::from)
+    .and_then(|value| match value {
+        1 => Ok(NoContent),
+        _ => Err(Error::NotFound),
+    })
+}
+
 create_routes!(crate::backend::document::Document {
     module: document,
     add_json: "/documents",
@@ -597,7 +638,9 @@ fn rocket() -> _ {
                         login_html,
                         logout,
                         download_document,
-                        group_overview
+                        group_overview,
+                        add_member_to_group,
+                        remove_member_from_group
                     )
             ),
         )
@@ -606,7 +649,10 @@ fn rocket() -> _ {
 #[cfg(test)]
 mod tests {
     use super::{auth, rocket, Config};
-    use crate::backend::database::{DefaultGenerator, Insertable};
+    use crate::backend::{
+        database::{DefaultGenerator, Insertable, PrimaryKey},
+        person::{Group, Membership, Person},
+    };
     use rocket::{http::ContentType, local::blocking::Client, State};
     use rocket_dyn_templates::context;
 
@@ -667,6 +713,25 @@ mod tests {
         let (client, _) = login_with_callback(engine, |_| ());
         client
     }
+
+    pub fn generate_everything_for_memmbership(
+        engine: &rocket::Rocket<rocket::Build>,
+    ) -> (PrimaryKey<Person>, PrimaryKey<Group>) {
+        let database = State::<Config>::get(&engine)
+            .expect("valid database")
+            .database();
+        let person = Person::create_default(&database)
+            .insert(&database)
+            .expect("valid person");
+        let group = Group::create_default(&database)
+            .insert(&database)
+            .expect("valid group");
+        (person, group)
+    }
+
+    ///
+    /// ---------- The actual unit tests. ----------
+    ///
 
     #[test]
     fn test_login() {
@@ -783,5 +848,108 @@ mod tests {
         );
         assert_eq!(response.content_type(), Some(ContentType::PDF));
         assert_eq!(response.into_bytes().expect("valid bytes"), example_data);
+    }
+
+    #[test]
+    fn test_membership_insert() {
+        let engine = rocket();
+        let (person, group) = generate_everything_for_memmbership(&engine);
+        let client = crate::tests::login(engine);
+
+        // Check there is no member before the insertion ...
+        {
+            let state = client.rocket().state::<Config>().expect("valid database");
+            assert_eq!(
+                Membership::find_all_members(&state.database(), group)
+                    .unwrap()
+                    .len(),
+                0
+            )
+        }
+
+        let creation_response = client
+            .post(format!("/groups/{}/{}", group.0, person.0))
+            .dispatch();
+        assert_eq!(creation_response.status(), rocket::http::Status::Created);
+
+        // ... and some afterwards.
+        {
+            let memberships = {
+                let state = client.rocket().state::<Config>().expect("valid database");
+                Membership::find_all_members(&state.database(), group).unwrap()
+            };
+            assert_eq!(memberships.len(), 1);
+            assert_eq!(memberships.get(0).unwrap().person, person);
+        }
+    }
+
+    #[test]
+    fn test_membership_insert_unauthorized() {
+        let engine = rocket();
+        let (person, group) = generate_everything_for_memmbership(&engine);
+
+        // No login here
+        let client = Client::tracked(engine).expect("valid client");
+        let creation_response = client
+            .post(format!("/groups/{}/{}", person.0, group.0))
+            .dispatch();
+        assert_eq!(
+            creation_response.status(),
+            rocket::http::Status::Unauthorized
+        );
+    }
+
+    #[test]
+    fn test_membership_delete() {
+        let engine = rocket();
+        let (person, group) = generate_everything_for_memmbership(&engine);
+        let client = crate::tests::login(engine);
+
+        // Add a new membership ...
+        {
+            let database = client
+                .rocket()
+                .state::<Config>()
+                .expect("valid database")
+                .database();
+            Membership {
+                person,
+                group,
+                updated: None,
+                comment: None,
+            }
+            .insert(&database)
+            .expect("insertion sucessfull");
+        }
+
+        let creation_response = client
+            .delete(format!("/groups/{}/{}", group.0, person.0))
+            .dispatch();
+        assert_eq!(creation_response.status(), rocket::http::Status::NoContent);
+
+        // ... and check it is missing after delete.
+        {
+            let memberships = {
+                let state = client.rocket().state::<Config>().expect("valid database");
+                Membership::find_all_members(&state.database(), group).unwrap()
+            };
+            assert_eq!(memberships.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_membership_delete_unauthorized() {
+        let engine = rocket();
+        let (person, group) = generate_everything_for_memmbership(&engine);
+
+        // No login here
+        let client = Client::tracked(engine).expect("valid client");
+        let creation_response = client
+            .delete(format!("/groups/{}/{}", person.0, group.0))
+            .dispatch();
+        assert_eq!(
+            creation_response.status(),
+            rocket::http::Status::Unauthorized
+        );
     }
 }
