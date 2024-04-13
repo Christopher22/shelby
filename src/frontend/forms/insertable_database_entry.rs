@@ -28,19 +28,25 @@ impl InsertableDatabaseEntry for crate::backend::person::Person {
     const FIELDS: [Field; 5] = [
         Field::new(
             "name",
-            InputType::Text(Metadata {
-                label: "Name",
-                placeholder: Some("Full name of the person"),
-                required: true,
-            }),
+            InputType::Text(
+                Metadata {
+                    label: "Name",
+                    placeholder: Some("Full name of the person"),
+                    required: true,
+                },
+                false,
+            ),
         ),
         Field::new(
             "address",
-            InputType::Text(Metadata {
-                label: "Address",
-                placeholder: Some("Address of the person"),
-                required: true,
-            }),
+            InputType::Text(
+                Metadata {
+                    label: "Address",
+                    placeholder: Some("Address of the person"),
+                    required: true,
+                },
+                true,
+            ),
         ),
         Field::new(
             "email",
@@ -60,11 +66,14 @@ impl InsertableDatabaseEntry for crate::backend::person::Person {
         ),
         Field::new(
             "comment",
-            InputType::Text(Metadata {
-                label: "Comment",
-                placeholder: Some("More comments regarding the person"),
-                required: false,
-            }),
+            InputType::Text(
+                Metadata {
+                    label: "Comment",
+                    placeholder: Some("More comments regarding the person"),
+                    required: false,
+                },
+                true,
+            ),
         ),
     ];
 
@@ -109,11 +118,14 @@ impl InsertableDatabaseEntry for crate::backend::document::Document {
         ),
         Field::new(
             "description",
-            InputType::Text(Metadata {
-                label: "Description",
-                placeholder: Some("The description of the document"),
-                required: true,
-            }),
+            InputType::Text(
+                Metadata {
+                    label: "Description",
+                    placeholder: Some("The description of the document"),
+                    required: true,
+                },
+                true,
+            ),
         ),
         // Private field from here
         Field::new(
@@ -134,11 +146,14 @@ impl InsertableDatabaseEntry for crate::backend::person::Group {
     const NAME: &'static str = "New group";
     const FIELDS: [Field; 1] = [Field::new(
         "description",
-        InputType::Text(Metadata {
-            label: "Description",
-            placeholder: Some("Description of the new group"),
-            required: true,
-        }),
+        InputType::Text(
+            Metadata {
+                label: "Name",
+                placeholder: Some("Name of the new group"),
+                required: true,
+            },
+            false,
+        ),
     )];
 
     type PostMethod = rocket::serde::json::Json<Self>;
@@ -150,11 +165,14 @@ impl InsertableDatabaseEntry for crate::backend::user::User {
     const FIELDS: [Field; 5] = [
         Field::new(
             "username",
-            InputType::Text(Metadata {
-                label: "User name",
-                placeholder: Some("Name of the new user"),
-                required: true,
-            }),
+            InputType::Text(
+                Metadata {
+                    label: "User name",
+                    placeholder: Some("Name of the new user"),
+                    required: true,
+                },
+                false,
+            ),
         ),
         Field::new(
             "password",
@@ -187,11 +205,14 @@ impl InsertableDatabaseEntry for crate::backend::accounting::Category {
     const NAME: &'static str = "New category";
     const FIELDS: [Field; 1] = [Field::new(
         "description",
-        InputType::Text(Metadata {
-            label: "Description",
-            placeholder: Some("Description of the new category"),
-            required: true,
-        }),
+        InputType::Text(
+            Metadata {
+                label: "Description",
+                placeholder: Some("Description of the new category"),
+                required: true,
+            },
+            false,
+        ),
     )];
 
     type PostMethod = rocket::serde::json::Json<Self>;
@@ -202,11 +223,14 @@ impl InsertableDatabaseEntry for crate::backend::accounting::CostCenter {
     const NAME: &'static str = "New cost center";
     const FIELDS: [Field; 1] = [Field::new(
         "description",
-        InputType::Text(Metadata {
-            label: "Description",
-            placeholder: Some("Description of the new cost center"),
-            required: true,
-        }),
+        InputType::Text(
+            Metadata {
+                label: "Description",
+                placeholder: Some("Description of the new cost center"),
+                required: true,
+            },
+            false,
+        ),
     )];
 
     type PostMethod = rocket::serde::json::Json<Self>;
@@ -234,11 +258,14 @@ impl InsertableDatabaseEntry for crate::backend::accounting::Account {
         ),
         Field::new(
             "description",
-            InputType::Text(Metadata {
-                label: "Description",
-                placeholder: Some("Description of the new account"),
-                required: true,
-            }),
+            InputType::Text(
+                Metadata {
+                    label: "Description",
+                    placeholder: Some("Description of the new account"),
+                    required: true,
+                },
+                false,
+            ),
         ),
     ];
 
@@ -283,11 +310,14 @@ impl InsertableDatabaseEntry for crate::backend::accounting::Entry {
         ),
         Field::new(
             "description",
-            InputType::Text(Metadata {
-                label: "Description",
-                placeholder: Some("Description of the new entry"),
-                required: true,
-            }),
+            InputType::Text(
+                Metadata {
+                    label: "Description",
+                    placeholder: Some("Description of the new entry"),
+                    required: true,
+                },
+                true,
+            ),
         ),
     ];
 

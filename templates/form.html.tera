@@ -22,7 +22,7 @@ Shelby: {{ name }}
             {% endfor %}
             </select>
             {% else %}
-            <input id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" placeholder="{{field.placeholder}}" {% if field.required == true %} required {% endif %} {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %} />
+            <{{field.element_type}} id="{{field.name}}" name="{{field.name}}" type="{{field.input_type}}" class="form-control" placeholder="{{field.placeholder}}" {% if field.required == true %} required {% endif %} {% for attribute in field.attributes %} {{attribute | safe}} {% endfor %}></{{field.element_type}}>
             {% endif %}
             <div class="invalid-feedback">
                 Valus is required.

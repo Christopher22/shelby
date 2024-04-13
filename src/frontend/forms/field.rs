@@ -32,7 +32,7 @@ impl<'a, 'b> Serialize for Field {
         const NUM_GENERAL_ELEMENTS: usize = 3;
 
         let mut result = match &self.input_type {
-            InputType::Text(meta)
+            InputType::Text(meta, _)
             | InputType::Number(meta)
             | InputType::Email(meta)
             | InputType::Date(meta)
@@ -71,13 +71,14 @@ impl<'a, 'b> Serialize for Field {
         result.serialize_field("name", self.id)?;
         result.serialize_field("input_type", self.input_type.html_value())?;
         result.serialize_field("attributes", &self.attributes)?;
+        result.serialize_field("element_type", self.input_type.element_type())?;
         result.end()
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum InputType {
-    Text(Metadata),
+    Text(Metadata, bool),
     Email(Metadata),
     Number(Metadata),
     Password(Metadata),
@@ -98,9 +99,10 @@ impl InputType {
         InputType::ForeignKey(ForeignKeyMetaData::new::<T>(metadata))
     }
 
+    /// The html value of the input
     const fn html_value(&self) -> &'static str {
         match self {
-            InputType::Text(_) => "text",
+            InputType::Text(_, _) => "text",
             InputType::Number(_) => "number",
             InputType::ForeignKey(_) => "select",
             InputType::Password(_) => "password",
@@ -108,6 +110,14 @@ impl InputType {
             InputType::Date(_) => "date",
             InputType::Hidden(_) => "hidden",
             InputType::File(_) => "file",
+        }
+    }
+
+    /// The type of the element.
+    const fn element_type(&self) -> &'static str {
+        match self {
+            InputType::Text(_, true) => "textarea",
+            _ => "input",
         }
     }
 }
