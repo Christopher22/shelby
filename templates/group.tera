@@ -5,6 +5,8 @@ Group: {{ description }}
 {% endblock title %}
 
 {% block main %}
+
+{% if rows | length > 0 %}
 <table class="table table-striped">
     <thead>
         <tr>
@@ -15,14 +17,15 @@ Group: {{ description }}
     </thead>
     <tbody>
         {% for row in rows %}
-        <tr>
-            <td>row.person</td>
-            <td>row.comment</td>
-            <td><button data="{{row.membership_path}}">Delete</button></td>
+        <tr id="row{{row.membership_path}}">
+            <td>{{row.person}}</td>
+            <td>{{row.comment}}</td>
+            <td><button class="btn btn-danger btn-sm" data-url="{{row.membership_path}}" onclick="deleteRow(this)">Delete</button></td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+{% endif %}
 
 <div class="container">
     <div class="row">
@@ -38,13 +41,68 @@ Group: {{ description }}
         </div>
     </div>
 </div>
+{% endblock main %}
+
+{% block body_end %}
+<div class="modal" id="infoModal" tabindex="-1" role="dialog" aria-labelledby="infoModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="infoModalLabel" />
+        <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="infoModalBody">
+        <!-- Error message will be displayed here -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
+function showInfoModal(title, message) {
+    var modalTitle = document.getElementById('infoModalLabel');
+    modalTitle.textContent = title;
+
+    var modalBody = document.getElementById('infoModalBody');
+    modalBody.textContent = message;
+
+    new bootstrap.Modal("#infoModal").show();
+}
+
+function deleteRow(element) {
+    // Retrieve the URL from the data-url attribute, transform it to the membership ID, and the row id.
+    var fullUrl = element.getAttribute('data-url');
+    var url = "{{ primary_key }}/".concat(fullUrl.split('/').pop());
+
+    var xhr = new XMLHttpRequest(); // Create a new XMLHttpRequest
+    xhr.open("DELETE", url, true); // Initialize the request
+
+    xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            var row = element.closest('tr');
+            if (row) {
+                row.parentNode.removeChild(row);
+            }
+        } else {
+            showInfoModal("Error", xhr.statusText);
+        }
+    };
+
+    xhr.onerror = function() {
+        showInfoModal("Error", "The request failed");
+    };
+
+    xhr.send(); // Send the request
+}
+
 document.addEventListener("DOMContentLoaded", function() {
     // Get the button element
     var addButton = document.getElementById("add_new_persons");
-
-    // Add click event listener to the button
     addButton.addEventListener("click", function() {
         // Get the selected value from the dropdown
         var selectedPerson = document.getElementById("new_persons").value;
@@ -53,7 +111,8 @@ document.addEventListener("DOMContentLoaded", function() {
         var xhr = new XMLHttpRequest();
 
         // Configure the request
-        xhr.open("POST", "/memberships");
+        var url = "{{ primary_key }}/".concat(selectedPerson.split('/').pop());
+        xhr.open("POST", url);
         xhr.setRequestHeader("Content-Type", "application/json");
 
         // Define the data to be sent
@@ -61,16 +120,17 @@ document.addEventListener("DOMContentLoaded", function() {
 
         // Set up the onload function to handle the response
         xhr.onload = function() {
-            if (xhr.status === 200) {
-                console.log("Person added to group successfully!");
+            if (xhr.status === 201) {
+                // Update page for showing the newly added member
+                location.reload();
             } else {
-                console.error("Error:", xhr.statusText);
+                showInfoModal("Error", xhr.statusText);
             }
         };
 
         // Set up the onerror function to handle any errors
         xhr.onerror = function() {
-            console.error("Error:", xhr.statusText);
+            showInfoModal("Error", xhr.statusText)
         };
 
         // Send the request
@@ -79,4 +139,4 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-{% endblock main %}
+{% endblock body_end %}

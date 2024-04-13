@@ -103,7 +103,10 @@ impl RenderableDatabaseEntry<1> for Group {
     const URL_ADD: &'static str = "/groups/new";
 
     fn generate_table_row(group: Record<Self>, _: &ForeignKeyStorage<'_>) -> [String; 1] {
-        [group.value.description]
+        [format!(
+            "<a href={}>{}</a>",
+            group.identifier, group.value.description
+        )]
     }
 }
 

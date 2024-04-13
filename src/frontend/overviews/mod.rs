@@ -8,6 +8,7 @@ use crate::backend::{
 use super::{util::Map, ForeignKeyStorage};
 
 pub struct GroupOverview<'a> {
+    primary_key: PrimaryKey<Group>,
     foreign_keys: ForeignKeyStorage<'a, Map>,
     description: String,
     elements: Vec<(PrimaryKey<Person>, String)>,
@@ -26,13 +27,13 @@ impl<'a> GroupOverview<'a> {
             .into_iter()
             .map(|value| (value.person, value.comment.unwrap_or_default()))
             .collect();
-        let description = group.into_inner().description;
 
         let mut foreign_keys = ForeignKeyStorage::from(database);
         foreign_keys.add::<Person>()?;
         Ok(GroupOverview {
+            primary_key: group.identifier,
             foreign_keys,
-            description,
+            description: group.into_inner().description,
             elements,
         })
     }
@@ -57,6 +58,7 @@ impl<'a> super::Renderable for GroupOverview<'a> {
             .collect();
 
         rocket_dyn_templates::context! {
+            primary_key: self.primary_key,
             description: self.description,
             rows: rows,
             persons: ForeignKeyStorage::<'_, crate::frontend::util::List>::from(self.foreign_keys)
