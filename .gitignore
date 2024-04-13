@@ -120,5 +120,5 @@ $RECYCLE.BIN/
 /target
 /data_OLD
 .cargo
-*.sqlite
+*.sqlite*
 .vscode
