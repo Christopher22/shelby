@@ -23,6 +23,9 @@ use crate::{
 pub use self::forms::{ForeignKeyStorage, InsertableDatabaseEntry};
 pub use self::tables::RenderableDatabaseEntry;
 
+/// The current version of the package to present it in the frontend.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub trait Renderable: Sized {
     const TEMPLATE: &'static str;
 
@@ -55,7 +58,7 @@ pub async fn index_protected(
 
     Ok(Template::render(
         "dashboard",
-        rocket_dyn_templates::context! { cost_centers: cost_centers },
+        rocket_dyn_templates::context! { cost_centers: cost_centers, version: VERSION },
     ))
 }
 

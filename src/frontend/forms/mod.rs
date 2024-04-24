@@ -60,7 +60,8 @@ where
             fields: fields,
             post_url: self.post_url,
             method: T::PostMethod::DATA_TYPE,
-            foreign_keys: foreign_key_storage
+            foreign_keys: foreign_key_storage,
+            version: super::VERSION
         }
     }
 }

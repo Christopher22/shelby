@@ -415,7 +415,7 @@ macro_rules! write_routes {
 
 #[get("/", rank = 2)]
 async fn index_public() -> Template {
-    Template::render("login", context! {})
+    Template::render("login", context! { version: crate::frontend::VERSION})
 }
 
 #[get("/<file..>", rank = 10)]

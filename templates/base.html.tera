@@ -53,6 +53,7 @@
                             System
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+                            <li class="dropdown-item disabled" href="#">Shelby {{version}}</li>
                             <li><button onclick="toggleMode()" class="dropdown-item" href="#">Toggle dark mode</button></li>
                             <li><a class="dropdown-item" href="/users">Users</a></li>
                             <li><a class="dropdown-item" href="/users/logout">Logout</a></li>

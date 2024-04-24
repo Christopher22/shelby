@@ -129,7 +129,7 @@ pub fn login(
 
 #[get("/users/login")]
 pub async fn login_html() -> Template {
-    Template::render("login", context! {})
+    Template::render("login", context! { version: crate::frontend::VERSION })
 }
 
 #[get("/users/logout")]

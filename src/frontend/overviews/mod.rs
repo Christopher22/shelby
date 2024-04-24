@@ -61,7 +61,8 @@ impl<'a> super::Renderable for GroupOverview<'a> {
             primary_key: self.primary_key,
             description: self.description,
             rows: rows,
-            persons: ForeignKeyStorage::<'_, crate::frontend::util::List>::from(self.foreign_keys)
+            persons: ForeignKeyStorage::<'_, crate::frontend::util::List>::from(self.foreign_keys),
+            version: super::VERSION
         }
     }
 }

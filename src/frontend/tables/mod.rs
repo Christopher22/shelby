@@ -34,6 +34,7 @@ where
             rows: self.0,
             next_url: self.1.next(next_len).map(|value| format!("{}{}", T::url(), value.display_url())),
             previous_url: self.1.previous().map(|value| format!("{}{}", T::url(), value.display_url())),
+            version: super::VERSION
         }
     }
 }

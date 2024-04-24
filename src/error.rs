@@ -25,7 +25,11 @@ impl Error {
     ) -> rocket::response::Result<'o> {
         let response = match req.content_type() {
             Some(value) if value.0.is_json() => Json(details.as_ref()).respond_to(&req),
-            _ => Template::render("error", context! { error: details.as_ref() }).respond_to(&req),
+            _ => Template::render(
+                "error",
+                context! { error: details.as_ref(), version: crate::frontend::VERSION },
+            )
+            .respond_to(&req),
         };
 
         // Set the corresponding code
