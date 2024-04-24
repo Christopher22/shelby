@@ -17,4 +17,4 @@ jobs:
       - name: Setup Rust and caching
         uses: moonrepo/setup-rust@v1
       - name: Run all tests
-        run: cargo test --all
+        run: cargo test --all --nocapture
