@@ -12,7 +12,7 @@ mod error;
 mod frontend;
 mod util;
 
-use backend::{database::Selectable, person::Membership};
+use backend::{database::Selectable, person::Membership, Column};
 use rocket::{
     data::{Limits, ToByteUnit},
     form::Strict,
@@ -83,16 +83,16 @@ macro_rules! create_routes {
                 _user: AuthenticatedUser,
                 state: &State<Config>,
                 content_type: Option<&rocket::http::ContentType>,
-
                 limit: Option<crate::backend::Limit>,
                 offset: Option<usize>,
                 order: Option<crate::backend::Order>,
+                sort_by: Option<Column<DatabaseEntry>>,
             ) -> Result<Result<Template, Json<Vec<<DatabaseEntry as Selectable>::Output>>>, Error>
             {
                 // For some reason, putting pagination directly does not work. We generate it manually.
                 let pagination = Pagination {
                     limit: limit.unwrap_or_default(),
-                    column: crate::backend::Column::default(),
+                    column: sort_by.unwrap_or_default(),
                     order: order.unwrap_or_default(),
                     offset: offset.unwrap_or(0),
                 };
@@ -428,7 +428,7 @@ create_routes!(crate::backend::person::Person {
     add_json: "/persons",
     add_frontend: "/persons/new",
     get_single: "/persons/<id>",
-    get_multiple: "/persons?<limit>&<offset>&<order>"
+    get_multiple: "/persons?<sort_by>&<limit>&<offset>&<order>"
 });
 
 create_routes!(crate::backend::person::Group {
@@ -436,7 +436,7 @@ create_routes!(crate::backend::person::Group {
     add_json: "/groups",
     add_frontend: "/groups/new",
     get_single: "/groups/<id>",
-    get_multiple: "/groups?<limit>&<offset>&<order>"
+    get_multiple: "/groups?<sort_by>&<limit>&<offset>&<order>"
 });
 
 #[post("/groups/<group_id>/<person_id>")]
@@ -484,7 +484,7 @@ create_routes!(crate::backend::document::Document {
     add_json: "/documents",
     add_frontend: "/documents/new",
     get_single: "/documents/<id>",
-    get_multiple: "/documents?<limit>&<offset>&<order>"
+    get_multiple: "/documents?<sort_by>&<limit>&<offset>&<order>"
 });
 
 #[get("/documents/<id>/pdf")]
@@ -501,7 +501,7 @@ create_routes!(crate::backend::user::User {
     add_json: "/users",
     add_frontend: "/users/new",
     get_single: "/users/<id>",
-    get_multiple: "/users?<limit>&<offset>&<order>"
+    get_multiple: "/users?<sort_by>&<limit>&<offset>&<order>"
 });
 
 create_routes!(crate::backend::accounting::Account {
@@ -509,7 +509,7 @@ create_routes!(crate::backend::accounting::Account {
     add_json: "/accounts",
     add_frontend: "/accounts/new",
     get_single: "/accounts/<id>",
-    get_multiple: "/accounts?<limit>&<offset>&<order>"
+    get_multiple: "/accounts?<sort_by>&<limit>&<offset>&<order>"
 });
 
 create_routes!(crate::backend::accounting::Category {
@@ -517,7 +517,7 @@ create_routes!(crate::backend::accounting::Category {
     add_json: "/categories",
     add_frontend: "/categories/new",
     get_single: "/categories/<id>",
-    get_multiple: "/categories?<limit>&<offset>&<order>"
+    get_multiple: "/categories?<sort_by>&<limit>&<offset>&<order>"
 });
 
 create_routes!(crate::backend::accounting::CostCenter {
@@ -525,7 +525,7 @@ create_routes!(crate::backend::accounting::CostCenter {
     add_json: "/cost_centers",
     add_frontend: "/cost_centers/new",
     get_single: "/cost_centers/<id>",
-    get_multiple: "/cost_centers?<limit>&<offset>&<order>"
+    get_multiple: "/cost_centers?<sort_by>&<limit>&<offset>&<order>"
 });
 
 create_routes!(crate::backend::accounting::Entry {
@@ -533,7 +533,7 @@ create_routes!(crate::backend::accounting::Entry {
     add_json: "/entries",
     add_frontend: "/entries/new",
     get_single: "/entries/<id>",
-    get_multiple: "/entries?<limit>&<offset>&<order>"
+    get_multiple: "/entries?<sort_by>&<limit>&<offset>&<order>"
 });
 
 /// Read a value from STDIN and return it without whitespace.

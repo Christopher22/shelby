@@ -13,7 +13,13 @@ Shelby: {{ title }}
     <thead>
         <tr>
             {% for header in headers %}
-            <th scope="col">{{header}}</th>
+            <th scope="col">
+            {% if header.1 | length > 1 %}
+            <a class="sort-button" sort_by="{{header.1}}">{{header.0}}</a>
+            {% else %}
+            {{header.0}}
+            {% endif %}
+            </th>
             {% endfor %}
         </tr>
     </thead>
@@ -52,3 +58,44 @@ Shelby: {{ title }}
     </ul>
 </nav>
 {% endblock main %}
+
+{% block body_end %}
+<script>
+    document.querySelectorAll('.sort-button').forEach(button => {
+        button.addEventListener('click', function() {
+            const sortBy = this.getAttribute('sort_by');
+            const currentUrl = new URL(window.location);
+            const currentSort = currentUrl.searchParams.get('sort_by');
+            const currentOrder = currentUrl.searchParams.get('order') || 'desc';
+
+            if (currentSort === sortBy && currentOrder === 'asc') {
+                currentUrl.searchParams.set('order', 'desc');
+            } else {
+                currentUrl.searchParams.set('order', 'asc');
+            }
+            
+            currentUrl.searchParams.set('sort_by', sortBy);
+            window.location = currentUrl.href;
+        });
+    });
+
+    // Function to update the button display based on the current sort settings
+    function updateButtonStyles() {
+        const currentUrl = new URL(window.location);
+        const sortedBy = currentUrl.searchParams.get('sort_by');
+        const sortOrder = currentUrl.searchParams.get('order') || 'asc';
+
+        document.querySelectorAll('.sort-button').forEach(button => {
+            const sortBy = button.getAttribute('sort_by');
+            if (sortBy === sortedBy) {
+                button.textContent = button.textContent.concat(sortOrder === 'asc' ? ' △' : ' ▽')
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+    }
+
+    updateButtonStyles();
+</script>
+{% endblock body_end %}

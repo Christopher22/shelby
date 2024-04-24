@@ -29,7 +29,7 @@ where
         let next_len = self.0.len();
         context! {
             title: &T::TITLE,
-            headers: &T::COLUMNS,
+            headers: T::COLUMNS.into_iter().zip(T::COLUMNS_SORTABLE.into_iter()).collect::<Vec<(&str, &str)>>(),
             url_add: &T::URL_ADD,
             rows: self.0,
             next_url: self.1.next(next_len).map(|value| format!("{}{}", T::url(), value.display_url())),
@@ -47,6 +47,9 @@ pub trait RenderableDatabaseEntry<const N: usize>: Selectable {
 
     /// The path to the form to create a new element.
     const URL_ADD: &'static str;
+
+    /// Map columns to sortable table names.
+    const COLUMNS_SORTABLE: [&'static str; N] = [""; N];
 
     /// Load required foreign keys before generating the rows.
     fn load_required_foreign_keys(
@@ -115,6 +118,7 @@ impl RenderableDatabaseEntry<6> for Document {
     const COLUMNS: [&'static str; 6] =
         ["File", "Recieved", "Processed", "From", "To", "Description"];
     const URL_ADD: &'static str = "/documents/new";
+    const COLUMNS_SORTABLE: [&'static str; 6] = ["", "recieved", "processed", "", "", ""];
 
     fn load_required_foreign_keys(
         foreign_key_storage: &mut ForeignKeyStorage<'_>,
@@ -147,6 +151,7 @@ impl RenderableDatabaseEntry<3> for User {
     const TITLE: &'static str = "Users";
     const COLUMNS: [&'static str; 3] = ["Name", "Creation date", "Used by"];
     const URL_ADD: &'static str = "/users/new";
+    const COLUMNS_SORTABLE: [&'static str; 3] = ["", "creation_date", ""];
 
     fn load_required_foreign_keys(
         foreign_key_storage: &mut ForeignKeyStorage<'_>,
@@ -223,6 +228,7 @@ impl RenderableDatabaseEntry<5> for crate::backend::accounting::Entry {
         "Amount",
         "Description",
     ];
+    const COLUMNS_SORTABLE: [&'static str; 5] = ["", "account", "cost_center", "amount", ""];
     const URL_ADD: &'static str = "/entries/new";
 
     fn load_required_foreign_keys(
